@@ -1,0 +1,10 @@
+{
+    "server": {
+        "port": 3000
+    },
+    "ollama": {
+        "host": "https://api.ollama.com",
+        "model": "qwen3-vl:235b",
+        "key": "9413225a93524c578046fb7b8649432b.RNgI5SspLBnjixDLgWrScqZZ"
+    }
+}
