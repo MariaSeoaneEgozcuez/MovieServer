@@ -1,5 +1,7 @@
-import { getQuiz } from "../models/ollama/index.js";
+// Importamos la función correcta que sí existe en nuestro modelo
+import { getMovieRecomendation } from "../models/ollama/index.js";
 
 export async function llmCall(message) {
-    return getMovieRecomendation(message)   
+    // Llamamos a la función que acabamos de importar
+    return getMovieRecomendation(message);
 }
