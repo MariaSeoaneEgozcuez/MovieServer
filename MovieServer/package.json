@@ -12,7 +12,12 @@
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "dependencies": {
+    "bcrypt": "^6.0.0",
+    "better-sqlite3": "^12.6.2",
     "config": "^4.2.0",
-    "fastify": "^5.7.4"
+    "dotenv": "^17.3.1",
+    "fastify": "^5.7.4",
+    "jsonwebtoken": "^9.0.3",
+    "sqlite3": "^5.1.7"
   }
 }
