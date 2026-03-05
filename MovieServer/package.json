@@ -12,7 +12,11 @@
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "dependencies": {
+    "@fastify/swagger": "^9.7.0",
+    "@fastify/swagger-ui": "^5.2.5",
     "config": "^4.2.0",
-    "fastify": "^5.7.4"
+    "fastify": "^5.7.4",
+    "sqlite": "^5.1.1",
+    "sqlite3": "^5.1.7"
   }
 }

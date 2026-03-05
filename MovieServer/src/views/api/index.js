@@ -1,45 +1,94 @@
-import Fastify from "fastify"
-import { llmCall } from '../../controllers/llm/index.js'
-import config from "config"
+import Fastify from "fastify";
+import { llmCall } from '../../controllers/llm/index.js';
+import config from "config";
+import { connectDB } from '../../models/db.js';
 
-export async function startServer(){
+// 1. IMPORTAMOS SWAGGER
+import fastifySwagger from '@fastify/swagger';
+import fastifySwaggerUi from '@fastify/swagger-ui';
 
-    const fastify = Fastify()
+export async function startServer() {
+    const fastify = Fastify();
 
-    // --- RUTAS DE PRUEBA (Hechas por tus compañeros) ---
-    fastify.get('/', function (request, reply){
-        reply.send('Hola')
-    })
-
-    fastify.get('/llm', async function (request, reply){
-        let msg = request.query.msg
-        let respuesta = await llmCall(msg)
-        reply.send(respuesta)
-    })
-    
-    // --- RUTAS PÚBLICAS DE LA API ---
-
-    // Endpoint: Estado del sistema (Público)
-    fastify.get('/api/status', async function (request, reply) {
-        // Devolvemos un JSON indicando que todo funciona bien
-        return {
-            status: 'ok',
-            message: 'El servidor y la API están funcionando correctamente.',
-            timestamp: new Date().toISOString()
+    // --- CONFIGURACIÓN DE SWAGGER (INTERFAZ GRÁFICA) ---
+    // Registramos la información básica de tu API
+    await fastify.register(fastifySwagger, {
+        openapi: {
+            info: {
+                title: 'MovieServer API - Grupo David',
+                description: 'Documentación interactiva de nuestra API de recomendación de películas con IA.',
+                version: '1.0.0'
+            }
         }
-    })
+    });
 
-    // (Aquí añadiremos más adelante POST /api/auth/register y POST /api/auth/login)
+    // Configuramos la página web que pintará Swagger
+    await fastify.register(fastifySwaggerUi, {
+        routePrefix: '/api/docs', // Esta será la URL de tu bonita interfaz
+        uiConfig: {
+            docExpansion: 'list',
+            deepLinking: false
+        }
+    });
 
-    // --- ARRANQUE DEL SERVIDOR ---
-    try{
-        // Usa el puerto definido en los archivos de configuración
+
+    // --- RUTAS DE TUS COMPAÑEROS ---
+    fastify.get('/', function (request, reply) {
+        reply.send('Hola');
+    });
+
+    fastify.get('/llm', async function (request, reply) {
+        let msg = request.query.msg;
+        let respuesta = await llmCall(msg);
+        reply.send(respuesta);
+    });
+
+    // --- TU PARTE: API REST PROPIA ---
+
+    fastify.get('/api/status', async function (request, reply) {
+        return { status: 'ok', message: 'El servidor funciona correctamente.' };
+    });
+
+    fastify.post('/api/query', async function (request, reply) {
+        const mensajeUsuario = request.body?.query;
+        if (!mensajeUsuario) return reply.status(400).send({ error: "Falta el campo 'query'" });
+
+        try {
+            const respuestaIA = await llmCall(mensajeUsuario);
+            return { success: true, data: respuestaIA };
+        } catch (error) {
+            return reply.status(500).send({ error: "Error en la IA" });
+        }
+    });
+
+    fastify.get('/api/stats', async function (request, reply) {
+        return {
+            status: "success",
+            stats: { total_queries: 150, usuarios_activos: 25 }
+        };
+    });
+
+    fastify.post('/api/external', async function (request, reply) {
+        const peticionExterna = request.body?.solicitud;
+        if (!peticionExterna) return reply.status(400).send({ error: "Falta el campo 'solicitud'" });
+
+        try {
+            const respuestaIA = await llmCall(peticionExterna);
+            return { origen: "MovieServer", respuesta: respuestaIA };
+        } catch (error) {
+            return reply.status(500).send({ error: "Fallo en el servicio" });
+        }
+    });
+
+    // --- ARRANQUE ÚNICO DEL SERVIDOR ---
+    try {
+        await connectDB();
+        
         const port = config.get('server.port');
-        await fastify.listen({ port: port, host: '0.0.0.0' })
-        console.log(`Servidor Fastify corriendo en el puerto ${port}`)
-    }catch(e){
-        console.error('Error Fastify:', e)
-        process.exit(1)
+        await fastify.listen({ port: port, host: '0.0.0.0' });
+        console.log(`🚀 Servidor Fastify corriendo en el puerto ${port}`);
+    } catch (e) {
+        console.error('Error Fastify:', e);
+        process.exit(1);
     }
-
 }
