@@ -153,7 +153,7 @@ export async function startServer() {
         
         const port = config.get('server.port');
         await fastify.listen({ port: port, host: '0.0.0.0' });
-        console.log(`🚀 Servidor Fastify corriendo en el puerto ${port}`);
+        console.log(`Servidor Fastify corriendo en el puerto ${port}`);
     } catch (e) {
         console.error('Error Fastify:', e);
         process.exit(1);
