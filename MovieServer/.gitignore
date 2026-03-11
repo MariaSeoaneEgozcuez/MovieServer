@@ -142,3 +142,6 @@ dist
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 .vite/
+
+#Archivo local con la clave de Ollama, que no se subirá al repositorio
+config/local.json
