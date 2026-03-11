@@ -1,10 +1,23 @@
 {
+  "name": "MovieServer",
+  "version": "1.0.0",
+  "description": "Servidor de recomendaciones de películas",
+  "license": "ISC",
+  "author": "Raquel Corporales, Jorge García Comesañas, David García, Linda Payeras y María Seoane",
+  "type": "module",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch=. src/index.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
   "dependencies": {
     "@fastify/jwt": "^10.0.0",
+    "@fastify/swagger": "^9.7.0",
+    "@fastify/swagger-ui": "^5.2.5",
     "bcrypt": "^6.0.0",
-    "config": "^4.4.1",
+    "config": "^4.2.0",
     "fastify": "^5.7.4",
-    "jsonwebtoken": "^9.0.3",
     "sqlite": "^5.1.1",
     "sqlite3": "^5.1.7"
   }
