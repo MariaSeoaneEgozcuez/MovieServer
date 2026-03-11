@@ -1,0 +1,16 @@
+{
+    "server": {
+        "port": 3000
+    },
+    "db": {
+        "filename": "./bbdd.db"
+    },
+    "ollama": {
+        "host": "https://api.ollama.com",
+        "model": "qwen3-vl:235b",
+        "key": ""
+    },
+    "jwt": {
+        "secret": "super_secreto_para_desarrollo_123"
+    }
+}
