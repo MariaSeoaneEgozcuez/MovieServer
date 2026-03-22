@@ -1,7 +1,15 @@
 {
-  "name": "MovieServer",
+  "name": "movieserver",
   "version": "1.0.0",
   "description": "Servidor de recomendaciones de películas",
+  "homepage": "https://github.com/MariaSeoaneEgozcuez/MovieServer#readme",
+  "bugs": {
+    "url": "https://github.com/MariaSeoaneEgozcuez/MovieServer/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/MariaSeoaneEgozcuez/MovieServer.git"
+  },
   "license": "ISC",
   "author": "Raquel Corporales, Jorge García Comesañas, David García, Linda Payeras y María Seoane",
   "type": "module",
@@ -9,16 +17,21 @@
   "scripts": {
     "start": "node src/index.js",
     "dev": "node --watch=. src/index.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start-bot": "node src/telegram/bot.js"
   },
   "dependencies": {
     "@fastify/jwt": "^10.0.0",
     "@fastify/swagger": "^9.7.0",
     "@fastify/swagger-ui": "^5.2.5",
+    "axios": "^1.13.6",
     "bcrypt": "^6.0.0",
     "config": "^4.2.0",
+    "express": "^5.2.1",
     "fastify": "^5.7.4",
+    "nodemon": "^3.1.14",
     "sqlite": "^5.1.1",
-    "sqlite3": "^5.1.7"
+    "sqlite3": "^5.1.7",
+    "telegraf": "^4.16.3"
   }
 }

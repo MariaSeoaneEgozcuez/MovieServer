@@ -48,6 +48,11 @@ export async function startServer() {
         let respuesta = await llmCall(msg);
         reply.send(respuesta);
     });
+    
+    // REVISAR SI SE HACE ASI PARA TELEGRAM
+    fastify.get('/api/telegram', async function (request, reply) {
+        return { status: "success", message: "¡Bienvenido a la API de Telegram!" };
+    });
 
     // ==========================================
     // 3. TU PARTE: API REST PROPIA (Actividad 3.4)

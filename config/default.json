@@ -12,5 +12,8 @@
     },
     "jwt": {
         "secret": "super_secreto_para_desarrollo_123"
+    },
+    "telegram": {
+        "botToken": "7651358471:AAE0tlzUNTAXBDXoFQT7IJZMAoDpTERqh7U"
     }
 }
