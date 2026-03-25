@@ -2,14 +2,32 @@ import Fastify from "fastify";
 import { llmCall } from '../../controllers/llm/index.js';
 import config from "config";
 import { connectDB, getDB } from '../../models/db.js';
-
 import fastifySwagger from '@fastify/swagger';
 import fastifySwaggerUi from '@fastify/swagger-ui';
+import fastifyCors from '@fastify/cors';
 import bcrypt from 'bcrypt';
 import fastifyJwt from '@fastify/jwt';
+import { register, login } from '../../controllers/authControl.js'
+import { authenticateToken } from '../../middleware/authMiddleware.js';
 
 export async function startServer() {
     const fastify = Fastify();
+
+    // Conectar base de datos primero
+    try {
+        await connectDB();
+    } catch (e) {
+        console.error('Error conectando BD:', e);
+        process.exit(1);
+    }
+
+    // ==========================================
+    // 0. HABILITAR CORS (para que el frontend pueda conectarse)
+    // ==========================================
+    await fastify.register(fastifyCors, {
+        origin: true,
+        credentials: true
+    });
 
     // ==========================================
     // 1. CONFIGURACIÓN DE SWAGGER Y JWT
@@ -90,67 +108,21 @@ export async function startServer() {
     // ==========================================
     // 4. AUTENTICACIÓN Y JWT (Actividad 3.2)
     // ==========================================
-    fastify.post('/api/auth/register', async function (request, reply) {
-        const { username, email, password } = request.body || {};
-
-        if (!username || !email || !password) {
-            return reply.status(400).send({ error: "Faltan datos (username, email, password)." });
+    fastify.post('/api/auth/register',register)
+    fastify.post('/api/auth/login',login)
+    fastify.get('/api/auth/verify', {
+        preHandler: authenticateToken
+    }, async function (request, reply){
+        return {
+            valid: true,
+            user: request.user
         }
-
-        try {
-            const hashedPassword = await bcrypt.hash(password, 10);
-            const db = getDB();
-            
-            await db.run(
-                `INSERT INTO users (username, email, password) VALUES (?, ?, ?)`,
-                [username, email, hashedPassword]
-            );
-
-            return { success: true, message: "Usuario registrado correctamente." };
-        } catch (error) {
-            if (error.code === 'SQLITE_CONSTRAINT') {
-                return reply.status(409).send({ error: "El usuario o email ya existe." });
-            }
-            console.error(error);
-            return reply.status(500).send({ error: "Error interno al crear el usuario." });
-        }
-    });
-
-    fastify.post('/api/auth/login', async function (request, reply) {
-        const { email, password } = request.body || {};
-
-        if (!email || !password) {
-            return reply.status(400).send({ error: "Faltan datos (email, password)." });
-        }
-
-        try {
-            const db = getDB();
-            const user = await db.get(`SELECT * FROM users WHERE email = ?`, [email]);
-            
-            if (!user) {
-                return reply.status(401).send({ error: "Credenciales inválidas." });
-            }
-
-            const contrasenaValida = await bcrypt.compare(password, user.password);
-            if (!contrasenaValida) {
-                return reply.status(401).send({ error: "Credenciales inválidas." });
-            }
-
-            const token = fastify.jwt.sign({ id: user.id, username: user.username });
-
-            return { success: true, message: "Login exitoso", token: token };
-        } catch (error) {
-            console.error(error);
-            return reply.status(500).send({ error: "Error interno durante el login." });
-        }
-    });
+    })
 
     // ==========================================
     // 5. ARRANQUE DEL SERVIDOR
     // ==========================================
     try {
-        await connectDB(); // Conectamos a la base de datos primero
-        
         const port = config.get('server.port');
         await fastify.listen({ port: port, host: '0.0.0.0' });
         console.log(`Servidor Fastify corriendo en el puerto ${port}`);
