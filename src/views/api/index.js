@@ -2,11 +2,12 @@ import Fastify from "fastify";
 import { llmCall } from '../../controllers/llm/index.js';
 import config from "config";
 import { connectDB, getDB } from '../../models/db.js';
-
 import fastifySwagger from '@fastify/swagger';
 import fastifySwaggerUi from '@fastify/swagger-ui';
 import bcrypt from 'bcrypt';
 import fastifyJwt from '@fastify/jwt';
+import { register, login } from '../../controllers/authControl.js'
+import { authenticateToken } from '../../Middleware/authMiddleware.js';
 
 export async function startServer() {
     const fastify = Fastify();
