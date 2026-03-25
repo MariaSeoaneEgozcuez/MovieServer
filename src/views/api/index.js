@@ -90,60 +90,23 @@ export async function startServer() {
     // ==========================================
     // 4. AUTENTICACIÓN Y JWT (Actividad 3.2)
     // ==========================================
-    fastify.post('/api/auth/register', async function (request, reply) {
-        const { username, email, password } = request.body || {};
-
-        if (!username || !email || !password) {
-            return reply.status(400).send({ error: "Faltan datos (username, email, password)." });
+    fastify.post('/api/auth/register',register)
+    fastify.post('/api/auth/login',login)
+    fastify.get('/api/auth/verify', {
+        preHandler: authenticateToken
+    }, async function (request, reply){
+        return {
+            valid: true,
+            user: request.user
         }
+    })
 
-        try {
-            const hashedPassword = await bcrypt.hash(password, 10);
-            const db = getDB();
-            
-            await db.run(
-                `INSERT INTO users (username, email, password) VALUES (?, ?, ?)`,
-                [username, email, hashedPassword]
-            );
-
-            return { success: true, message: "Usuario registrado correctamente." };
-        } catch (error) {
-            if (error.code === 'SQLITE_CONSTRAINT') {
-                return reply.status(409).send({ error: "El usuario o email ya existe." });
-            }
-            console.error(error);
-            return reply.status(500).send({ error: "Error interno al crear el usuario." });
-        }
-    });
-
-    fastify.post('/api/auth/login', async function (request, reply) {
-        const { email, password } = request.body || {};
-
-        if (!email || !password) {
-            return reply.status(400).send({ error: "Faltan datos (email, password)." });
-        }
-
-        try {
-            const db = getDB();
-            const user = await db.get(`SELECT * FROM users WHERE email = ?`, [email]);
-            
-            if (!user) {
-                return reply.status(401).send({ error: "Credenciales inválidas." });
-            }
-
-            const contrasenaValida = await bcrypt.compare(password, user.password);
-            if (!contrasenaValida) {
-                return reply.status(401).send({ error: "Credenciales inválidas." });
-            }
-
-            const token = fastify.jwt.sign({ id: user.id, username: user.username });
-
-            return { success: true, message: "Login exitoso", token: token };
-        } catch (error) {
-            console.error(error);
-            return reply.status(500).send({ error: "Error interno durante el login." });
-        }
-    });
+    try{
+        await fastify.listen({port: config.get('server.port')})
+    }catch(e){
+        console.error('Error Fastify:',e)
+        process.exit(1)
+    }
 
     // ==========================================
     // 5. ARRANQUE DEL SERVIDOR
