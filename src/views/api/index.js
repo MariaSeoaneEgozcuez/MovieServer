@@ -4,6 +4,7 @@ import config from "config";
 import { connectDB, getDB } from '../../models/db.js';
 import fastifySwagger from '@fastify/swagger';
 import fastifySwaggerUi from '@fastify/swagger-ui';
+import fastifyCors from '@fastify/cors';
 import bcrypt from 'bcrypt';
 import fastifyJwt from '@fastify/jwt';
 import { register, login } from '../../controllers/authControl.js'
@@ -11,6 +12,22 @@ import { authenticateToken } from '../../Middleware/authMiddleware.js';
 
 export async function startServer() {
     const fastify = Fastify();
+
+    // Conectar base de datos primero
+    try {
+        await connectDB();
+    } catch (e) {
+        console.error('Error conectando BD:', e);
+        process.exit(1);
+    }
+
+    // ==========================================
+    // 0. HABILITAR CORS (para que el frontend pueda conectarse)
+    // ==========================================
+    await fastify.register(fastifyCors, {
+        origin: true,
+        credentials: true
+    });
 
     // ==========================================
     // 1. CONFIGURACIÓN DE SWAGGER Y JWT
@@ -113,8 +130,6 @@ export async function startServer() {
     // 5. ARRANQUE DEL SERVIDOR
     // ==========================================
     try {
-        await connectDB(); // Conectamos a la base de datos primero
-        
         const port = config.get('server.port');
         await fastify.listen({ port: port, host: '0.0.0.0' });
         console.log(`Servidor Fastify corriendo en el puerto ${port}`);
