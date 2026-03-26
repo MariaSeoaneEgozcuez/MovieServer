@@ -10,7 +10,7 @@ export async function getUserbyUsername(username) {
             filename: config.get('db.filename'),
             driver: sqlite3.Database
         });
-        const user = await db.get('SELECT * FROM users WHERE username = ?', [username]);
+        const user = await db.get('SELECT * FROM Usuarios WHERE username = ?', [username]);
         await db.close();
         return user;
     } catch (error) {
@@ -26,7 +26,7 @@ export async function getUserbyEmail(email) {
             filename: config.get('db.filename'),
             driver: sqlite3.Database
         });
-        const user = await db.get('SELECT * FROM users WHERE email = ?', [email]);
+        const user = await db.get('SELECT * FROM Usuarios WHERE email = ?', [email]);
         await db.close();
         return user;
     } catch (error) {
