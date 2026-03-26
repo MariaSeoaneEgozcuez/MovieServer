@@ -1,5 +1,7 @@
 import config from 'config';
 import { Telegraf } from 'telegraf';
+import { getMovieRecomendation } from '../../models/ollama/index.js';
+import { getUserByTelegramId } from '../../models/db.js';
 
 const bot = new Telegraf(config.get("telegram.botToken"));
 const telegramId = ctx.from.id;
@@ -32,11 +34,21 @@ bot.command('documentation', async (ctx) => {
 
 bot.on('text', async (ctx) => {
 
+    const telegramId = ctx.from.id;
+    const user = await getUserByTelegramId(telegramId); // Implementa esta función para obtener el usuario de tu base de datos
+
+    if (!user) {
+        ctx.reply('Please register or login first using /register or /login.');
+        return;
+    }
+
     const userMessage = ctx.message.text;
     const userId = ctx.from.id;
 
     console.log(`Received message from user ${userId}: ${userMessage}`);
-    ctx.reply('Recibido ' + userMessage);
+
+    const recommendation = await getMovieRecomendation(userMessage);
+    ctx.reply(recommendation);
 });
 
 bot.launch();
