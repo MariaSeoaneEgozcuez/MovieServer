@@ -1,7 +1,7 @@
 import { useState } from 'react';
 
 export default function Login({ onLogin }) {
-  const [email, setEmail] = useState('');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -15,7 +15,7 @@ export default function Login({ onLogin }) {
       const resp = await fetch('http://localhost:3000/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password })
+        body: JSON.stringify({ username, password })
       });
 
       const contentType = resp.headers.get('content-type') || '';
@@ -44,11 +44,11 @@ export default function Login({ onLogin }) {
       {error && <p className="error-msg">{error}</p>}
 
       <div className="form-group">
-        <label>Correo</label>
+        <label>Nombre de usuario</label>
         <input
-          type="email"
-          value={email}
-          onChange={e => setEmail(e.target.value)}
+          type="text"
+          value={username}
+          onChange={e => setUsername(e.target.value)}
           required
         />
       </div>

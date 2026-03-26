@@ -2,6 +2,7 @@
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import { getUserbyUsername, createUser } from '../models/User.js';
+import config from 'config';
 
 // Función para manejar el registro de un nuevo usuario
 export async function register(req, res) {
@@ -9,14 +10,14 @@ export async function register(req, res) {
     try {
         const existingUser = await getUserbyUsername(username);
         if (existingUser) {
-            return res.status(400).json({ message: 'El nombre de usuario ya está en uso' });
+            return res.status(400).send({ message: 'El nombre de usuario ya está en uso' });
         }
         const hashedPassword = await bcrypt.hash(password, 10);
         const newUser = await createUser(username, email, hashedPassword);
-        res.status(201).json({ message: 'Usuario registrado exitosamente', user: newUser });
+        res.status(201).send({ message: 'Usuario registrado exitosamente', user: newUser });
     } catch (error) {
         console.error('Error al registrar usuario:', error);
-        res.status(500).json({ message: 'Error interno del servidor' });
+        res.status(500).send({ message: 'Error interno del servidor' });
     }
 }
 
@@ -26,17 +27,17 @@ export async function login(req, res) {
     try {
         const user = await getUserbyUsername(username);
         if (!user) {
-            return res.status(400).json({ message: 'Credenciales inválidas' });
+            return res.status(400).send({ message: 'Credenciales inválidas' });
         }
         const isMatch = await bcrypt.compare(password, user.password);
         if (!isMatch) {
-            return res.status(400).json({ message: 'Credenciales inválidas' });
+            return res.status(400).send({ message: 'Credenciales inválidas' });
         }
-        const token = jwt.sign({ id: user.id, username: user.username }, process.env.JWT_SECRET, { expiresIn: '1h' });
-        res.json({ message: 'Inicio de sesión exitoso', token });
+        const token = jwt.sign({ id: user.id, username: user.username }, config.get('jwt.secret'), { expiresIn: '1h' });
+        res.send({ message: 'Inicio de sesión exitoso', token });
     } catch (error) {
         console.error('Error al iniciar sesión:', error);
-        res.status(500).json({ message: 'Error interno del servidor' });
+        res.status(500).send({ message: 'Error interno del servidor' });
     }
 }
 

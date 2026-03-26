@@ -1,7 +1,7 @@
 import { useState } from 'react';
 
 export default function Register({ onRegistered }) {
-  const [name, setName] = useState('');
+  const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -16,7 +16,7 @@ export default function Register({ onRegistered }) {
       const resp = await fetch('http://localhost:3000/api/auth/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, email, password })
+        body: JSON.stringify({ username, email, password })
       });
 
       const contentType = resp.headers.get('content-type') || '';
@@ -31,7 +31,7 @@ export default function Register({ onRegistered }) {
       if (!resp.ok) throw new Error(data.error || 'Error al registrar');
 
       setSuccess('Registro correcto, ya puedes iniciar sesión.');
-      setName('');
+      setUsername('');
       setEmail('');
       setPassword('');
 
@@ -48,7 +48,7 @@ export default function Register({ onRegistered }) {
       {success && <p className="success-msg">{success}</p>}
       <div className="form-group">
         <label>Nombre</label>
-        <input value={name} onChange={e => setName(e.target.value)} type="text" required />
+        <input value={username} onChange={e => setUsername(e.target.value)} type="text" required />
       </div>
       <div className="form-group">
         <label>Correo</label>
