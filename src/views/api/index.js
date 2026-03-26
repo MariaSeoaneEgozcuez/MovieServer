@@ -7,7 +7,7 @@ import fastifySwaggerUi from '@fastify/swagger-ui';
 import fastifyCors from '@fastify/cors';
 import bcrypt from 'bcrypt';
 import fastifyJwt from '@fastify/jwt';
-import { register, login } from '../../controllers/authControl.js'
+import { register, login, logout } from '../../controllers/authControl.js'
 import { authenticateToken } from '../../Middleware/authMiddleware.js';
 
 export async function startServer() {
@@ -118,6 +118,10 @@ export async function startServer() {
             user: request.user
         }
     })
+
+    fastify.post('/api/auth/logout', {
+        preHandler: authenticateToken
+    }, logout)
 
     // ==========================================
     // 5. ARRANQUE DEL SERVIDOR
