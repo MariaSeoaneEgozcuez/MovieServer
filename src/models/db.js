@@ -29,6 +29,16 @@ export async function connectDB() {
         `);
         console.log('Tabla de usuarios verificada/creada.');
 
+        // Creamos la tabla de tokens revocados si no existe
+        await dbInstance.exec(`
+            CREATE TABLE IF NOT EXISTS RevokedTokens (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                token TEXT UNIQUE NOT NULL,
+                revoked_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        `);
+        console.log('Tabla de tokens revocados verificada/creada.');
+
     } catch (error) {
         console.error('Error conectando a SQLite:', error.message);
         process.exit(1);

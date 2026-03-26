@@ -45,3 +45,33 @@ export async function createUser(username, email, password) {
     await db.close();
     return result;
 }
+
+// Función para revocar un token
+export async function revokeToken(token) {
+    try {
+        const db = await open({
+            filename: config.get('db.filename'),
+            driver: sqlite3.Database
+        });
+        await db.run('INSERT INTO RevokedTokens (token) VALUES (?)', [token]);
+        await db.close();
+    } catch (error) {
+        console.error('Error revocando token:', error);
+    }
+}
+
+// Función para verificar si un token está revocado
+export async function isTokenRevoked(token) {
+    try {
+        const db = await open({
+            filename: config.get('db.filename'),
+            driver: sqlite3.Database
+        });
+        const result = await db.get('SELECT id FROM RevokedTokens WHERE token = ?', [token]);
+        await db.close();
+        return !!result;
+    } catch (error) {
+        console.error('Error verificando token:', error);
+        return false;
+    }
+}
