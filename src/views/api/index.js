@@ -8,7 +8,7 @@ import fastifyCors from '@fastify/cors';
 import bcrypt from 'bcrypt';
 import fastifyJwt from '@fastify/jwt';
 import { register, login } from '../../controllers/authControl.js'
-import { authenticateToken } from '../../middleware/authMiddleware.js';
+import { authenticateToken } from '../../Middleware/authMiddleware.js';
 
 export async function startServer() {
     const fastify = Fastify();
@@ -118,6 +118,13 @@ export async function startServer() {
             user: request.user
         }
     })
+
+    try{
+        await fastify.listen({port: config.get('server.port')})
+    }catch(e){
+        console.error('Error Fastify:',e)
+        process.exit(1)
+    }
 
     // ==========================================
     // 5. ARRANQUE DEL SERVIDOR

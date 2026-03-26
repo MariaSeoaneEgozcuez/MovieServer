@@ -1,21 +1,20 @@
 // Middleware para manejar la autenticación con JWT
 import jwt from 'jsonwebtoken';
-import config from 'config';
 
 // Middleware para verificar el token JWT (si existe o si es válido)
-export async function authenticateToken(request, reply) {
-    const authHeader = request.headers['authorization'];
+export function authenticateToken(req, res, next) {
+    const authHeader = req.headers['authorization'];
     const token = authHeader && authHeader.split(' ')[1];
 
     if (!token) {
-        return reply.status(401).send({ error: 'Acceso no autorizado' });
+        return res.status(401).json({ message: 'Acceso no autorizado' });
     }
 
-    try {
-        const secret = config.get('jwt.secret');
-        const user = jwt.verify(token, secret);
-        request.user = user;
-    } catch (error) {
-        return reply.status(403).send({ error: 'Token inválido' });
-    }
+    jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
+        if (err) {
+            return res.status(403).json({ message: 'Token inválido' });
+        }
+        req.user = user;
+        next();
+    });
 }

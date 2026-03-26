@@ -1,7 +1,6 @@
 // src/controllers/models/user.js -- Funciones para interactuar con la base de datos de usuarios
 import sqlite3 from 'sqlite3';
 import { open } from 'sqlite';
-import config from 'config';
 
 // Función para buscar un usuario por su nombre de usuario
 export async function getUserbyUsername(username) {
@@ -37,19 +36,11 @@ export async function getUserbyEmail(email) {
 
 // Funcion para crear un nuevo usuario en la base de datos
 export async function createUser(username, email, password) {
-    try {
-        const db = await open({
-            filename: config.get('db.filename'),
-            driver: sqlite3.Database
-        });
-        const result = await db.run(
-            'INSERT INTO Usuarios (username, email, password) VALUES (?, ?, ?)', 
-            [username, email, password]
-        );
-        await db.close();
-        return { id: result.lastID, username, email };
-    } catch (error) {
-        console.error('Error creando usuario:', error);
-        throw error;
-    }
+    const db = await open({
+        filename: './bbdd.db',
+        driver: sqlite3.Database
+    });
+    const result = await db.run('INSERT INTO Usuarios (username, email, password) VALUES (?, ?, ?)', [username, email, password]);
+    await db.close();
+    return result;
 }
