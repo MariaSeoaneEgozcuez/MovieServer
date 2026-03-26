@@ -20,7 +20,7 @@ export async function connectDB() {
         // Creamos la tabla de usuarios si no existe
         // Guardaremos el username, email y la contraseña (que luego encriptaremos)
         await dbInstance.exec(`
-            CREATE TABLE IF NOT EXISTS users (
+            CREATE TABLE IF NOT EXISTS Usuarios (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 username TEXT UNIQUE NOT NULL,
                 email TEXT UNIQUE NOT NULL,
