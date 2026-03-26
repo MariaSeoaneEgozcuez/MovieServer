@@ -119,13 +119,6 @@ export async function startServer() {
         }
     })
 
-    try{
-        await fastify.listen({port: config.get('server.port')})
-    }catch(e){
-        console.error('Error Fastify:',e)
-        process.exit(1)
-    }
-
     // ==========================================
     // 5. ARRANQUE DEL SERVIDOR
     // ==========================================
