@@ -29,15 +29,11 @@
     "axios": "^1.13.6",
     "bcrypt": "^6.0.0",
     "config": "^4.2.0",
-<<<<<<< HEAD
     "express": "^5.2.1",
-    "fastify": "^5.7.4",
     "nodemon": "^3.1.14",
-=======
     "cors": "^2.8.6",
     "fastify": "^5.8.4",
     "jsonwebtoken": "^9.0.3",
->>>>>>> fa9a2837298efc94168f78b73fb45adb8eed09d5
     "sqlite": "^5.1.1",
     "sqlite3": "^5.1.7",
     "telegraf": "^4.16.3"
