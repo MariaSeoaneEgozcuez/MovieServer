@@ -1,4 +1,4 @@
-// Importamos la función correcta que sí existe en nuestro modelo
+// Importamos la función de recomendación de películas desde el modelo de Ollama
 import { getMovieRecomendation } from "../../models/ollama/index.js";
 
 export async function llmCall(message) {
