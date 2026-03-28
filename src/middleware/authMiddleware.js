@@ -1,25 +1,34 @@
 // Middleware para manejar la autenticación con JWT
 import jwt from 'jsonwebtoken';
-import { isTokenRevoked } from '../models/User.js';
+import config from 'config';
+import { isTokenRevoked } from '../models/user.js';
 
-// Middleware para verificar el token JWT (si existe o si es válido)
-export function authenticateToken(req, res, next) {
-    const authHeader = req.headers['authorization'];
+// Middleware para verificar el token JWT con Fastify
+export async function authenticateToken(request, reply) {
+    const authHeader = request.headers['authorization'] || request.headers['Authorization'];
     const token = authHeader && authHeader.split(' ')[1];
 
     if (!token) {
-        return res.status(401).json({ message: 'Acceso no autorizado' });
+        return reply.code(401).send({ message: 'Acceso no autorizado' });
     }
 
-    jwt.verify(token, process.env.JWT_SECRET, async (err, user) => {
-        if (err) {
-            return res.status(403).json({ message: 'Token inválido' });
-        }
+    let decoded;
+    try {
+        decoded = jwt.verify(token, config.get('jwt.secret'));
+    } catch (err) {
+        console.error('JWT verification failed:', err.message);
+        return reply.code(403).send({ message: 'Token inválido' });
+    }
+
+    try {
         const revoked = await isTokenRevoked(token);
         if (revoked) {
-            return res.status(403).json({ message: 'Token revocado' });
+            return reply.code(403).send({ message: 'Token revocado' });
         }
-        req.user = user;
-        next();
-    });
+    } catch (err) {
+        console.error('Error consultando tokens revocados:', err);
+        return reply.code(500).send({ message: 'Error interno del servidor' });
+    }
+
+    request.user = decoded;
 }

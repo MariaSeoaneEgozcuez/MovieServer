@@ -11,6 +11,9 @@
         "key": ""
     },
     "jwt": {
-        "secret": "super_secreto_para_desarrollo_123"
+        "secret": ""
+    },
+    "telegram": {
+        "botToken": ""
     }
 }
