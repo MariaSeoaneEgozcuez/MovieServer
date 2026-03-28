@@ -64,7 +64,18 @@ bot.start((ctx) => {
 });
 
 bot.help((ctx) => {
-    ctx.reply('Comandos disponibles:\n/register - Crear cuenta\n/login - Iniciar sesión\n/logout - Cerrar sesión\n/docs - Ver la documentación API\nEnvía un mensaje para pedir recomendaciones cuando estás autenticado.');
+    ctx.reply('Comandos disponibles:\n/register - Crear cuenta\n/login - Iniciar sesión\n/logout - Cerrar sesión\n/status - Ver el estado del sistema\n/docs - Ver la documentación API\nEnvía un mensaje para pedir recomendaciones cuando estás autenticado.');
+});
+
+bot.command('status', async (ctx) => {
+    try {
+        const response = await axios.get(`${apiBaseUrl}/api/status`);
+        const data = response.data;
+        ctx.reply(`Estado del sistema:\n${data.status}: ${data.message}`);
+    } catch (error) {
+        const message = error.response?.data?.error || error.response?.data?.message || error.message;
+        ctx.reply(`No se pudo consultar el estado del sistema: ${message}`);
+    }
 });
 
 bot.command('docs', (ctx) => {
