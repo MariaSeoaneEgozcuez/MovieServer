@@ -8,6 +8,7 @@ import fastifyCors from '@fastify/cors';
 import fastifyJwt from '@fastify/jwt';
 import { register, login, logout } from '../../controllers/authControl.js'
 import { authenticateToken } from '../../middleware/authMiddleware.js';
+import { getSystemStats } from '../../models/user.js';
 
 export async function startServer() {
     const fastify = Fastify();
@@ -34,7 +35,7 @@ export async function startServer() {
     await fastify.register(fastifySwagger, {
         openapi: {
             info: {
-                title: 'MovieServer API - Grupo David',
+                title: 'MovieServer API',
                 description: 'Documentación interactiva de nuestra API.',
                 version: '1.0.0'
             }
@@ -107,10 +108,16 @@ export async function startServer() {
     });
 
     fastify.get('/api/stats', async function (request, reply) {
-        return {
-            status: "success",
-            stats: { total_queries: 150, usuarios_activos: 25 }
-        };
+        try {
+            const stats = await getSystemStats();
+            return {
+                status: "success",
+                stats
+            };
+        } catch (error) {
+            console.error('Error en /api/stats:', error);
+            return reply.code(500).send({ error: 'No se pudieron obtener las estadísticas del sistema' });
+        }
     });
 
     fastify.post('/api/external', {

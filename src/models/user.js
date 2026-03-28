@@ -45,6 +45,29 @@ export async function getUserbyEmail(email) {
     }
 }
 
+// Función para obtener estadísticas básicas del sistema
+export async function getSystemStats() {
+    try {
+        const db = await open({
+            filename: config.get('db.filename'),
+            driver: sqlite3.Database
+        });
+        const totalUsers = await db.get('SELECT COUNT(*) AS totalUsers FROM Usuarios');
+        const revokedTokens = await db.get('SELECT COUNT(*) AS revokedTokens FROM RevokedTokens');
+        await db.close();
+        return {
+            total_users: totalUsers?.totalUsers ?? 0,
+            revoked_tokens: revokedTokens?.revokedTokens ?? 0
+        };
+    } catch (error) {
+        console.error('Error obteniendo estadísticas del sistema:', error);
+        return {
+            total_users: 0,
+            revoked_tokens: 0
+        };
+    }
+}
+
 // Funcion para crear un nuevo usuario en la base de datos
 export async function createUser(username, email, password) {
     const db = await open({
