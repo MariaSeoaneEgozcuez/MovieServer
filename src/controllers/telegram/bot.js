@@ -64,7 +64,7 @@ bot.start((ctx) => {
 });
 
 bot.help((ctx) => {
-    ctx.reply('Comandos disponibles:\n/register - Crear cuenta\n/login - Iniciar sesión\n/logout - Cerrar sesión\n/status - Ver el estado del sistema\n/docs - Ver la documentación API\nEnvía un mensaje para pedir recomendaciones cuando estás autenticado.');
+    ctx.reply('Comandos disponibles:\n/register - Crear cuenta\n/login - Iniciar sesión\n/logout - Cerrar sesión\n/status - Ver el estado del sistema\n/stats - Ver estadísticas del sistema\n/docs - Ver la documentación API\nEnvía un mensaje para pedir recomendaciones cuando estás autenticado.');
 });
 
 bot.command('status', async (ctx) => {
@@ -75,6 +75,23 @@ bot.command('status', async (ctx) => {
     } catch (error) {
         const message = error.response?.data?.error || error.response?.data?.message || error.message;
         ctx.reply(`No se pudo consultar el estado del sistema: ${message}`);
+    }
+});
+
+bot.command('stats', async (ctx) => {
+    try {
+        const response = await axios.get(`${apiBaseUrl}/api/stats`);
+        const data = response.data;
+        if (data?.status === 'success' && data?.stats) {
+            const stats = data.stats;
+            const lines = Object.entries(stats).map(([key, value]) => `${key}: ${value}`);
+            ctx.reply(`Estadísticas del sistema:\n${lines.join('\n')}`);
+        } else {
+            ctx.reply('No se pudieron obtener las estadísticas del sistema.');
+        }
+    } catch (error) {
+        const message = error.response?.data?.error || error.response?.data?.message || error.message;
+        ctx.reply(`No se pudo consultar las estadísticas: ${message}`);
     }
 });
 
