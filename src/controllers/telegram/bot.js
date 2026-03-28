@@ -1,28 +1,45 @@
-import config from 'config';
-import axios from 'axios';
-import { Telegraf, session } from 'telegraf';
 
+// Importamos las dependencias necesarias
+import config from 'config'; // Para leer la configuración del sistema
+import axios from 'axios'; // Para hacer peticiones HTTP a la API
+import { Telegraf, session } from 'telegraf'; // Telegraf es la librería para crear el bot de Telegram
+
+
+// Creamos la instancia del bot de Telegram usando el token configurado
 const bot = new Telegraf(config.get('telegram.botToken'));
+// Habilitamos el uso de sesiones para guardar el estado de cada usuario
 bot.use(session());
 
+
+// URL base de la API REST del backend
 const apiBaseUrl = `http://localhost:${config.get('server.port')}`;
+// Chat ID opcional para enviar mensaje de bienvenida automático
 const welcomeChatId = config.has('telegram.welcomeChatId') && config.get('telegram.welcomeChatId') ? config.get('telegram.welcomeChatId') : process.env.TELEGRAM_WELCOME_CHAT_ID || null;
 
+
+// Reinicia el flujo de conversación y borra el estado temporal del usuario
 function resetFlow(ctx) {
     ctx.session = ctx.session || {};
     ctx.session.state = null;
     ctx.session.pending = null;
 }
 
+
+// Envía un mensaje indicando que el usuario debe autenticarse
 function requireLoginMessage(ctx) {
     ctx.reply('Necesitas iniciar sesión o registrarte para pedir recomendaciones. Usa /register para crear una cuenta, /login para iniciar sesión y /help para ver todos los comandos.');
 }
 
+
+// Devuelve el header de autorización para las peticiones protegidas
 function authHeaders(token) {
     return { Authorization: `Bearer ${token}` };
 }
 
+
+// Da formato legible a la respuesta de recomendaciones para mostrarla en Telegram
 function formatRecommendationResponse(responseData) {
+    // Si la respuesta es string, intentamos parsear JSON si corresponde
     if (typeof responseData === 'string') {
         const trimmed = responseData.trim();
         if ((trimmed.startsWith('{') || trimmed.startsWith('[')) && trimmed.length > 1) {
@@ -36,6 +53,7 @@ function formatRecommendationResponse(responseData) {
         }
     }
 
+    // Si la respuesta ya es un objeto con recomendaciones
     if (responseData?.recommendations && Array.isArray(responseData.recommendations)) {
         let text = 'En base a tus gustos te recomiendo estas películas:\n\n';
         responseData.recommendations.forEach((rec, index) => {
@@ -51,22 +69,30 @@ function formatRecommendationResponse(responseData) {
         return text.trim();
     }
 
+    // Si la respuesta tiene un campo data, lo procesamos recursivamente
     if (responseData?.data) {
         return formatRecommendationResponse(responseData.data);
     }
 
+    // Si no es ninguno de los anteriores, devolvemos el string o el JSON formateado
     return typeof responseData === 'string' ? responseData : JSON.stringify(responseData, null, 2);
 }
 
+
+// Comando /start: mensaje de bienvenida y reseteo de sesión
 bot.start((ctx) => {
     resetFlow(ctx);
     ctx.reply(`Hola ${ctx.from.first_name}! Bienvenido al MovieServer.\nNecesitas iniciar sesión o registrarte para pedir recomendaciones.\nUsa /register para crear una cuenta, /login para iniciar sesión y /help para ver todos los comandos disponibles.`);
 });
 
+
+// Comando /help: muestra los comandos disponibles
 bot.help((ctx) => {
     ctx.reply('Comandos disponibles:\n/register - Crear cuenta\n/login - Iniciar sesión\n/logout - Cerrar sesión\n/status - Ver el estado del sistema\n/stats - Ver estadísticas del sistema\n/docs - Ver la documentación API\nEnvía un mensaje para pedir recomendaciones cuando estás autenticado.');
 });
 
+
+// Comando /status: consulta el estado del backend
 bot.command('status', async (ctx) => {
     try {
         const response = await axios.get(`${apiBaseUrl}/api/status`);
@@ -78,6 +104,8 @@ bot.command('status', async (ctx) => {
     }
 });
 
+
+// Comando /stats: muestra estadísticas del sistema
 bot.command('stats', async (ctx) => {
     try {
         const response = await axios.get(`${apiBaseUrl}/api/stats`);
@@ -95,10 +123,14 @@ bot.command('stats', async (ctx) => {
     }
 });
 
+
+// Comando /docs: muestra el enlace a la documentación Swagger
 bot.command('docs', (ctx) => {
     ctx.reply(`Accede a la documentación aquí: ${apiBaseUrl}/api/docs`);
 });
 
+
+// Comando /register: inicia el flujo de registro de usuario
 bot.command('register', (ctx) => {
     resetFlow(ctx);
     ctx.session.state = 'register_username';
@@ -106,6 +138,8 @@ bot.command('register', (ctx) => {
     ctx.reply('Vamos a registrar tu cuenta. ¿Cuál será tu nombre de usuario?');
 });
 
+
+// Comando /login: inicia el flujo de login de usuario
 bot.command('login', (ctx) => {
     resetFlow(ctx);
     ctx.session.state = 'login_username';
@@ -113,6 +147,8 @@ bot.command('login', (ctx) => {
     ctx.reply('Inicia sesión indicando tu nombre de usuario.');
 });
 
+
+// Comando /logout: cierra la sesión del usuario y revoca el token
 bot.command('logout', async (ctx) => {
     if (!ctx.session?.token) {
         ctx.reply('No estás autenticado actualmente. Usa /login para iniciar sesión.');
@@ -134,14 +170,18 @@ bot.command('logout', async (ctx) => {
     ctx.reply('Has cerrado sesión correctamente. Usa /login para volver a entrar.');
 });
 
+
+// Función auxiliar para registrar un usuario llamando a la API
 async function callRegister(username, email, password) {
     return axios.post(`${apiBaseUrl}/api/auth/register`, { username, email, password });
 }
 
+// Función auxiliar para hacer login llamando a la API
 async function callLogin(username, password) {
     return axios.post(`${apiBaseUrl}/api/auth/login`, { username, password });
 }
 
+// Función auxiliar para pedir recomendaciones a la API
 async function callRecommendation(ctx, query) {
     const token = ctx.session?.token;
     if (!token) {
@@ -154,9 +194,12 @@ async function callRecommendation(ctx, query) {
     return formatRecommendationResponse(response.data);
 }
 
+
+// Manejador de mensajes de texto: gestiona el flujo de registro/login y las recomendaciones
 bot.on('text', async (ctx) => {
     const text = ctx.message.text?.trim();
 
+    // Si el usuario está en medio de un flujo (registro/login), gestionamos el paso correspondiente
     if (ctx.session?.state) {
         switch (ctx.session.state) {
             case 'register_username':
@@ -210,11 +253,13 @@ bot.on('text', async (ctx) => {
         }
     }
 
+    // Si el usuario no está autenticado, le pedimos que se registre o inicie sesión
     if (!ctx.session?.token) {
         requireLoginMessage(ctx);
         return;
     }
 
+    // Si está autenticado, procesamos la petición de recomendación
     try {
         const recommendation = await callRecommendation(ctx, text);
         ctx.reply(recommendation);
@@ -230,6 +275,8 @@ bot.on('text', async (ctx) => {
     }
 });
 
+
+// Lanzamos el bot y, si está configurado, enviamos un mensaje de bienvenida al chat indicado
 bot.launch()
     .then(async () => {
         console.log('Telegram bot iniciado correctamente.');

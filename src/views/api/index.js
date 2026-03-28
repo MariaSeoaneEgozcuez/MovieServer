@@ -1,19 +1,25 @@
-import Fastify from "fastify";
-import { llmCall } from '../../controllers/llm/index.js';
-import config from "config";
-import { connectDB } from '../../models/db.js';
-import fastifySwagger from '@fastify/swagger';
-import fastifySwaggerUi from '@fastify/swagger-ui';
-import fastifyCors from '@fastify/cors';
-import fastifyJwt from '@fastify/jwt';
-import { register, login, logout } from '../../controllers/authControl.js'
-import { authenticateToken } from '../../middleware/authMiddleware.js';
-import { getSystemStats } from '../../models/user.js';
 
+// Importaciones de librerías y módulos propios
+import Fastify from "fastify"; // Framework web para Node.js
+import { llmCall } from '../../controllers/llm/index.js'; // Llama al modelo de recomendación LLM
+import config from "config"; // Configuración del sistema
+import { connectDB } from '../../models/db.js'; // Conexión a la base de datos SQLite
+import fastifySwagger from '@fastify/swagger'; // Documentación Swagger/OpenAPI
+import fastifySwaggerUi from '@fastify/swagger-ui'; // Interfaz Swagger UI
+import fastifyCors from '@fastify/cors'; // Middleware para CORS
+import fastifyJwt from '@fastify/jwt'; // Middleware para JWT
+import { register, login, logout } from '../../controllers/authControl.js' // Controladores de autenticación
+import { authenticateToken } from '../../middleware/authMiddleware.js'; // Middleware para validar JWT
+import { getSystemStats } from '../../models/user.js'; // Función para estadísticas
+
+
+// Función principal que arranca el servidor y configura todas las rutas y middlewares
 export async function startServer() {
+    // Creamos la instancia de Fastify
     const fastify = Fastify();
 
-    // Conectar base de datos primero
+
+    // Conectamos a la base de datos SQLite antes de arrancar el servidor
     try {
         await connectDB();
     } catch (e) {
@@ -21,17 +27,13 @@ export async function startServer() {
         process.exit(1);
     }
 
-    // ==========================================
-    // 0. HABILITAR CORS (para que el frontend pueda conectarse)
-    // ==========================================
+    // Permitimos peticiones desde cualquier origen
     await fastify.register(fastifyCors, {
         origin: true,
         credentials: true
     });
 
-    // ==========================================
-    // 1. CONFIGURACIÓN DE SWAGGER Y JWT
-    // ==========================================
+    // Configuramos Swagger/OpenAPI para documentar todos los endpoints
     await fastify.register(fastifySwagger, {
         openapi: {
             info: {
@@ -40,8 +42,7 @@ export async function startServer() {
                 version: '1.0.0',
                 contact: {
                     name: 'MovieServer Team',
-                    url: 'https://github.com/MariaSeoaneEgozcuez/MovieServer',
-                    email: 'soporte@movieserver.com'
+                    url: 'https://github.com/MariaSeoaneEgozcuez/MovieServer'
                 }
             },
             servers: [
@@ -69,6 +70,8 @@ export async function startServer() {
         }
     });
 
+
+    // Habilitamos la interfaz Swagger UI en /api/docs
     await fastify.register(fastifySwaggerUi, {
         routePrefix: '/api/docs',
         uiConfig: {
@@ -77,10 +80,14 @@ export async function startServer() {
         }
     });
 
+
+    // Registramos el plugin de JWT para proteger rutas
     fastify.register(fastifyJwt, {
         secret: config.get('jwt.secret')
     });
 
+
+    // Manejador global de errores para devolver mensajes claros
     fastify.setErrorHandler((error, request, reply) => {
         console.error('Unhandled error:', error);
         const statusCode = error.statusCode && error.statusCode >= 400 ? error.statusCode : 500;
@@ -88,20 +95,20 @@ export async function startServer() {
         reply.code(statusCode).send({ error: message });
     });
 
-    // ==========================================
-    // 2. RUTAS DE TUS COMPAÑEROS
-    // ==========================================
+    // Endpoint raíz de prueba
     fastify.get('/', function (request, reply) {
         reply.send('Hola');
     });
 
+
+    // Endpoint de prueba para llamar directamente al modelo LLM
     fastify.get('/llm', async function (request, reply) {
         let msg = request.query.msg;
         let respuesta = await llmCall(msg);
         reply.send(respuesta);
     });
     
-    // REVISAR SI SE HACE ASI PARA TELEGRAM
+    // Endpoint de prueba para integración con Telegram
     fastify.get('/api/telegram', {
         schema: {
             tags: ['Telegram'],
@@ -123,9 +130,7 @@ export async function startServer() {
         return { status: "success", message: "¡Bienvenido a la API de Telegram!" };
     });
 
-    // ==========================================
-    // 3. TU PARTE: API REST PROPIA (Actividad 3.4)
-    // ==========================================
+    // Endpoint para consultar el estado del servidor
     fastify.get('/api/status', {
         schema: {
             tags: ['Sistema'],
@@ -147,6 +152,7 @@ export async function startServer() {
         return { status: 'ok', message: 'El servidor funciona correctamente.' };
     });
 
+    // Endpoint principal para pedir recomendaciones de películas (requiere JWT)
     fastify.post('/api/query', {
         schema: {
             tags: ['Recomendaciones'],
@@ -194,6 +200,7 @@ export async function startServer() {
         }
     });
 
+    // Endpoint para obtener estadísticas del sistema
     fastify.get('/api/stats', {
         schema: {
             tags: ['Sistema'],
@@ -233,6 +240,7 @@ export async function startServer() {
         }
     });
 
+    // Endpoint avanzado para enviar solicitudes arbitrarias al modelo IA
     fastify.post('/api/external', {
         schema: {
             tags: ['Recomendaciones'],
@@ -266,9 +274,7 @@ export async function startServer() {
         }
     });
 
-    // ==========================================
-    // 4. AUTENTICACIÓN Y JWT (Actividad 3.2)
-    // ==========================================
+    // Endpoint para registrar un nuevo usuario
     fastify.post('/api/auth/register', {
         schema: {
             tags: ['Auth'],
@@ -297,6 +303,7 @@ export async function startServer() {
             }
         }
     }, register);
+    // Endpoint para login de usuario y obtención de token JWT
     fastify.post('/api/auth/login', {
         schema: {
             tags: ['Auth'],
@@ -334,6 +341,7 @@ export async function startServer() {
             }
         }
     }, login);
+    // Endpoint para verificar la validez de un token JWT
     fastify.get('/api/auth/verify', {
         schema: {
             tags: ['Auth'],
@@ -376,6 +384,7 @@ export async function startServer() {
         };
     });
 
+    // Endpoint para cerrar sesión y revocar el token JWT
     fastify.post('/api/auth/logout', {
         schema: {
             tags: ['Auth'],
@@ -400,9 +409,7 @@ export async function startServer() {
         preHandler: authenticateToken
     }, logout);
 
-    // ==========================================
-    // 5. ARRANQUE DEL SERVIDOR
-    // ==========================================
+    // Arrancamos el servidor en el puerto configurado
     try {
         const port = config.get('server.port');
         await fastify.listen({ port: port, host: '0.0.0.0' });
