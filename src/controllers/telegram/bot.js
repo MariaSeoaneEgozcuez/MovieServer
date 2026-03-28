@@ -1,60 +1,219 @@
 import config from 'config';
-import { Telegraf } from 'telegraf';
-import { getMovieRecomendation } from '../../models/ollama/index.js';
-// import { getUserByTelegramId } from '../../models/db.js';
+import axios from 'axios';
+import { Telegraf, session } from 'telegraf';
 
-const bot = new Telegraf(config.get("telegram.botToken"));
+const bot = new Telegraf(config.get('telegram.botToken'));
+bot.use(session());
+
+const apiBaseUrl = `http://localhost:${config.get('server.port')}`;
+const welcomeChatId = config.has('telegram.welcomeChatId') && config.get('telegram.welcomeChatId') ? config.get('telegram.welcomeChatId') : process.env.TELEGRAM_WELCOME_CHAT_ID || null;
+
+function resetFlow(ctx) {
+    ctx.session = ctx.session || {};
+    ctx.session.state = null;
+    ctx.session.pending = null;
+}
+
+function requireLoginMessage(ctx) {
+    ctx.reply('Necesitas iniciar sesión o registrarte para pedir recomendaciones. Usa /register para crear una cuenta, /login para iniciar sesión y /help para ver todos los comandos.');
+}
+
+function authHeaders(token) {
+    return { Authorization: `Bearer ${token}` };
+}
+
+function formatRecommendationResponse(responseData) {
+    if (typeof responseData === 'string') {
+        const trimmed = responseData.trim();
+        if ((trimmed.startsWith('{') || trimmed.startsWith('[')) && trimmed.length > 1) {
+            try {
+                responseData = JSON.parse(trimmed);
+            } catch (error) {
+                return responseData;
+            }
+        } else {
+            return responseData;
+        }
+    }
+
+    if (responseData?.recommendations && Array.isArray(responseData.recommendations)) {
+        let text = 'En base a tus gustos te recomiendo estas películas:\n\n';
+        responseData.recommendations.forEach((rec, index) => {
+            text += `${index + 1}. ${rec.title} (${rec.year})`;
+            if (rec.genres) {
+                text += `\n   Géneros: ${Array.isArray(rec.genres) ? rec.genres.join(', ') : rec.genres}`;
+            }
+            if (rec.reason) {
+                text += `\n   Por qué: ${rec.reason}`;
+            }
+            text += '\n\n';
+        });
+        return text.trim();
+    }
+
+    if (responseData?.data) {
+        return formatRecommendationResponse(responseData.data);
+    }
+
+    return typeof responseData === 'string' ? responseData : JSON.stringify(responseData, null, 2);
+}
 
 bot.start((ctx) => {
-    ctx.reply('Welcome ' + ctx.from.first_name + '! Lets search for movies you may like. \nFirst, please register or login to your account. \nUse /register or /login to get started.');
+    resetFlow(ctx);
+    ctx.reply(`Hola ${ctx.from.first_name}! Bienvenido al MovieServer.\nNecesitas iniciar sesión o registrarte para pedir recomendaciones.\nUsa /register para crear una cuenta, /login para iniciar sesión y /help para ver todos los comandos disponibles.`);
 });
 
 bot.help((ctx) => {
-    ctx.reply('Before sending a message, please register or login to your account. \n/register to create an account \n/login to access your account\n/logout to exit. \nSend any message to get movie recommendations based on your preferences.');
+    ctx.reply('Comandos disponibles:\n/register - Crear cuenta\n/login - Iniciar sesión\n/logout - Cerrar sesión\n/docs - Ver la documentación API\nEnvía un mensaje para pedir recomendaciones cuando estás autenticado.');
 });
 
-bot.settings((ctx) => {
-    ctx.reply('Settings');
+bot.command('docs', (ctx) => {
+    ctx.reply(`Accede a la documentación aquí: ${apiBaseUrl}/api/docs`);
 });
 
-// bot.command('register', async (ctx) => {
-//     const telegramId = ctx.from.id;
-//     ctx.reply("Register here:\nhttp://localhost:3000/api/auth/register?telegramId=" + telegramId);
-// });
+bot.command('register', (ctx) => {
+    resetFlow(ctx);
+    ctx.session.state = 'register_username';
+    ctx.session.pending = {};
+    ctx.reply('Vamos a registrar tu cuenta. ¿Cuál será tu nombre de usuario?');
+});
 
+bot.command('login', (ctx) => {
+    resetFlow(ctx);
+    ctx.session.state = 'login_username';
+    ctx.session.pending = {};
+    ctx.reply('Inicia sesión indicando tu nombre de usuario.');
+});
 
-// bot.command('login', async (ctx) => {
-//     const telegramId = ctx.from.id;
-//     ctx.reply("Login here:\nhttp://localhost:3000/api/auth/login?telegramId=" + telegramId);
-// });
+bot.command('logout', async (ctx) => {
+    if (!ctx.session?.token) {
+        ctx.reply('No estás autenticado actualmente. Usa /login para iniciar sesión.');
+        return;
+    }
 
-// bot.command('logout', async (ctx) => {
-//     const telegramId = ctx.from.id;
-//     ctx.reply("Logout here:\nhttp://localhost:3000/api/auth/logout?telegramId=" + telegramId);
-// });
+    const token = ctx.session.token;
+    resetFlow(ctx);
+    ctx.session.token = null;
+    ctx.session.user = null;
 
-// bot.command('documentation', async (ctx) => {
+    try {
+        await axios.post(`${apiBaseUrl}/api/auth/logout`, null, {
+            headers: authHeaders(token)
+        });
+    } catch (error) {
+        console.error('Error en logout:', error.message);
+    }
+    ctx.reply('Has cerrado sesión correctamente. Usa /login para volver a entrar.');
+});
 
-//     ctx.reply("Documentation here:\nhttp://localhost:3000/api/docs"); // Revisar
-// });
+async function callRegister(username, email, password) {
+    return axios.post(`${apiBaseUrl}/api/auth/register`, { username, email, password });
+}
+
+async function callLogin(username, password) {
+    return axios.post(`${apiBaseUrl}/api/auth/login`, { username, password });
+}
+
+async function callRecommendation(ctx, query) {
+    const token = ctx.session?.token;
+    if (!token) {
+        throw new Error('No autorizado');
+    }
+    const response = await axios.post(`${apiBaseUrl}/api/query`, { query }, {
+        headers: authHeaders(token)
+    });
+
+    return formatRecommendationResponse(response.data);
+}
 
 bot.on('text', async (ctx) => {
+    const text = ctx.message.text?.trim();
 
-    const telegramId = ctx.from.id;
- //   const user = await getUserByTelegramId(telegramId); // Implementa esta función para obtener el usuario de tu base de datos
+    if (ctx.session?.state) {
+        switch (ctx.session.state) {
+            case 'register_username':
+                ctx.session.pending.username = text;
+                ctx.session.state = 'register_email';
+                ctx.reply('Perfecto. Ahora dime tu correo electrónico.');
+                return;
+            case 'register_email':
+                ctx.session.pending.email = text;
+                ctx.session.state = 'register_password';
+                ctx.reply('Gracias. Finalmente, escribe una contraseña segura.');
+                return;
+            case 'register_password':
+                ctx.session.pending.password = text;
+                const { username, email, password } = ctx.session.pending;
+                try {
+                    await callRegister(username, email, password);
+                    const loginResponse = await callLogin(username, password);
+                    ctx.session.token = loginResponse.data.token;
+                    ctx.session.user = loginResponse.data.user;
+                    resetFlow(ctx);
+                    ctx.reply('Registro exitoso y has iniciado sesión. Ya puedes pedir recomendaciones.');
+                } catch (error) {
+                    const message = error.response?.data?.message || error.message;
+                    ctx.reply(`No se pudo registrar: ${message}`);
+                    resetFlow(ctx);
+                }
+                return;
+            case 'login_username':
+                ctx.session.pending.username = text;
+                ctx.session.state = 'login_password';
+                ctx.reply('Introduce tu contraseña.');
+                return;
+            case 'login_password':
+                ctx.session.pending.password = text;
+                try {
+                    const loginResponse = await callLogin(ctx.session.pending.username, text);
+                    ctx.session.token = loginResponse.data.token;
+                    ctx.session.user = loginResponse.data.user;
+                    resetFlow(ctx);
+                    ctx.reply('Has iniciado sesión correctamente. Ahora puedes pedir recomendaciones.');
+                } catch (error) {
+                    const message = error.response?.data?.message || error.message;
+                    ctx.reply(`Error de inicio de sesión: ${message}`);
+                    resetFlow(ctx);
+                }
+                return;
+            default:
+                resetFlow(ctx);
+                break;
+        }
+    }
 
-    // if (!user) {
-    //     ctx.reply('Please register or login first using /register or /login.');
-    //     return;
-    // }
+    if (!ctx.session?.token) {
+        requireLoginMessage(ctx);
+        return;
+    }
 
-    const userMessage = ctx.message.text;
-    const userId = ctx.from.id;
-
-    console.log(`Received message from user ${userId}: ${userMessage}`);
-
-    const recommendation = await getMovieRecomendation(userMessage);
-    ctx.reply(recommendation);
+    try {
+        const recommendation = await callRecommendation(ctx, text);
+        ctx.reply(recommendation);
+    } catch (error) {
+        const errorText = error.response?.data?.error || error.message;
+        if (errorText.toLowerCase().includes('autorizado') || error.response?.status === 401 || error.response?.status === 403) {
+            ctx.reply('Tu sesión expiró o no es válida. Usa /login para iniciar sesión de nuevo.');
+            ctx.session.token = null;
+            ctx.session.user = null;
+        } else {
+            ctx.reply(`Error al obtener recomendación: ${errorText}`);
+        }
+    }
 });
 
-bot.launch();
+bot.launch()
+    .then(async () => {
+        console.log('Telegram bot iniciado correctamente.');
+        if (welcomeChatId) {
+            await bot.telegram.sendMessage(
+                welcomeChatId,
+                'El bot de MovieServer se ha iniciado. Usa /start para ver el menú, /register para registrarte o /login para iniciar sesión.'
+            );
+        } else {
+            console.log('Aviso: no se ha configurado telegram.welcomeChatId ni TELEGRAM_WELCOME_CHAT_ID. El mensaje de bienvenida de inicio no se envía automáticamente.');
+        }
+    })
+    .catch((error) => {
+        console.error('Error al iniciar el bot de Telegram:', error);
+    });

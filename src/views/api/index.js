@@ -8,7 +8,7 @@ import fastifyCors from '@fastify/cors';
 import bcrypt from 'bcrypt';
 import fastifyJwt from '@fastify/jwt';
 import { register, login, logout } from '../../controllers/authControl.js'
-import { authenticateToken } from '../../Middleware/authMiddleware.js';
+import { authenticateToken } from '../../middleware/authMiddleware.js';
 
 export async function startServer() {
     const fastify = Fastify();
@@ -79,7 +79,9 @@ export async function startServer() {
         return { status: 'ok', message: 'El servidor funciona correctamente.' };
     });
 
-    fastify.post('/api/query', async function (request, reply) {
+    fastify.post('/api/query', {
+        preHandler: authenticateToken
+    }, async function (request, reply) {
         const mensajeUsuario = request.body?.query;
         if (!mensajeUsuario) return reply.status(400).send({ error: "Falta el campo 'query'" });
 
