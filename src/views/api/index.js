@@ -1,11 +1,10 @@
 import Fastify from "fastify";
 import { llmCall } from '../../controllers/llm/index.js';
 import config from "config";
-import { connectDB, getDB } from '../../models/db.js';
+import { connectDB } from '../../models/db.js';
 import fastifySwagger from '@fastify/swagger';
 import fastifySwaggerUi from '@fastify/swagger-ui';
 import fastifyCors from '@fastify/cors';
-import bcrypt from 'bcrypt';
 import fastifyJwt from '@fastify/jwt';
 import { register, login, logout } from '../../controllers/authControl.js'
 import { authenticateToken } from '../../middleware/authMiddleware.js';
@@ -54,6 +53,13 @@ export async function startServer() {
         secret: config.get('jwt.secret')
     });
 
+    fastify.setErrorHandler((error, request, reply) => {
+        console.error('Unhandled error:', error);
+        const statusCode = error.statusCode && error.statusCode >= 400 ? error.statusCode : 500;
+        const message = statusCode === 500 ? 'Error interno del servidor' : error.message;
+        reply.code(statusCode).send({ error: message });
+    });
+
     // ==========================================
     // 2. RUTAS DE TUS COMPAÑEROS
     // ==========================================
@@ -80,16 +86,23 @@ export async function startServer() {
     });
 
     fastify.post('/api/query', {
+        schema: {
+            body: {
+                type: 'object',
+                required: ['query'],
+                properties: {
+                    query: { type: 'string', minLength: 1 }
+                }
+            }
+        },
         preHandler: authenticateToken
     }, async function (request, reply) {
-        const mensajeUsuario = request.body?.query;
-        if (!mensajeUsuario) return reply.status(400).send({ error: "Falta el campo 'query'" });
-
         try {
-            const respuestaIA = await llmCall(mensajeUsuario);
+            const respuestaIA = await llmCall(request.body.query);
             return { success: true, data: respuestaIA };
         } catch (error) {
-            return reply.status(500).send({ error: "Error en la IA" });
+            console.error('Error en /api/query:', error);
+            return reply.code(500).send({ error: "Error en la IA" });
         }
     });
 
@@ -100,35 +113,66 @@ export async function startServer() {
         };
     });
 
-    fastify.post('/api/external', async function (request, reply) {
-        const peticionExterna = request.body?.solicitud;
-        if (!peticionExterna) return reply.status(400).send({ error: "Falta el campo 'solicitud'" });
-
+    fastify.post('/api/external', {
+        schema: {
+            body: {
+                type: 'object',
+                required: ['solicitud'],
+                properties: {
+                    solicitud: { type: 'string', minLength: 1 }
+                }
+            }
+        }
+    }, async function (request, reply) {
         try {
-            const respuestaIA = await llmCall(peticionExterna);
+            const respuestaIA = await llmCall(request.body.solicitud);
             return { origen: "MovieServer", respuesta: respuestaIA };
         } catch (error) {
-            return reply.status(500).send({ error: "Fallo en el servicio externo" });
+            console.error('Error en /api/external:', error);
+            return reply.code(500).send({ error: "Fallo en el servicio externo" });
         }
     });
 
     // ==========================================
     // 4. AUTENTICACIÓN Y JWT (Actividad 3.2)
     // ==========================================
-    fastify.post('/api/auth/register',register)
-    fastify.post('/api/auth/login',login)
+    fastify.post('/api/auth/register', {
+        schema: {
+            body: {
+                type: 'object',
+                required: ['username', 'email', 'password'],
+                properties: {
+                    username: { type: 'string', minLength: 3 },
+                    email: { type: 'string', format: 'email' },
+                    password: { type: 'string', minLength: 6 }
+                }
+            }
+        }
+    }, register);
+    fastify.post('/api/auth/login', {
+        schema: {
+            body: {
+                type: 'object',
+                required: ['username', 'password'],
+                properties: {
+                    username: { type: 'string', minLength: 3 },
+                    password: { type: 'string', minLength: 6 }
+                }
+            }
+        }
+    }, login);
     fastify.get('/api/auth/verify', {
         preHandler: authenticateToken
-    }, async function (request, reply){
+    }, async function (request, reply) {
         return {
             valid: true,
             user: request.user
-        }
-    })
+        };
+    });
 
     fastify.post('/api/auth/logout', {
         preHandler: authenticateToken
-    }, logout)
+    }, logout);
 
     // ==========================================
     // 5. ARRANQUE DEL SERVIDOR
