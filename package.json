@@ -26,16 +26,18 @@
     "@fastify/jwt": "^10.0.0",
     "@fastify/swagger": "^9.7.0",
     "@fastify/swagger-ui": "^5.2.5",
+    "amqplib": "^1.0.3",
     "axios": "^1.13.6",
     "bcrypt": "^6.0.0",
     "config": "^4.2.0",
-    "express": "^5.2.1",
-    "nodemon": "^3.1.14",
     "cors": "^2.8.6",
+    "express": "^5.2.1",
     "fastify": "^5.8.4",
     "jsonwebtoken": "^9.0.3",
+    "nodemon": "^3.1.14",
     "sqlite": "^5.1.1",
     "sqlite3": "^5.1.7",
-    "telegraf": "^4.16.3"
+    "telegraf": "^4.16.3",
+    "uuid": "^13.0.0"
   }
 }

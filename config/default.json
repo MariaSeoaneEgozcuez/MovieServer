@@ -11,7 +11,7 @@
         "key": ""
     },
     "jwt": {
-        "secret": ""
+        "secret": "secreto_dagasa_1"
     },
     "telegram": {
         "botToken": ""

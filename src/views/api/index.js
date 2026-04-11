@@ -11,6 +11,7 @@ import fastifyJwt from '@fastify/jwt'; // Middleware para JWT
 import { register, login, logout } from '../../controllers/authControl.js' // Controladores de autenticación
 import { authenticateToken } from '../../middleware/authMiddleware.js'; // Middleware para validar JWT
 import { getSystemStats } from '../../models/user.js'; // Función para estadísticas
+import { sendLlmRequest } from '../../../shared/messaging/llmRpcClient.js';
 
 
 // Función principal que arranca el servidor y configura todas las rutas y middlewares
@@ -38,35 +39,18 @@ export async function startServer() {
         openapi: {
             info: {
                 title: 'MovieServer API',
-                description: 'API REST para recomendaciones de películas, autenticación y gestión de usuarios. Incluye integración con Telegram y LLM.',
-                version: '1.0.0',
-                contact: {
-                    name: 'MovieServer Team',
-                    url: 'https://github.com/MariaSeoaneEgozcuez/MovieServer'
-                }
+                version: '1.0.0'
             },
-            servers: [
-                { url: 'http://localhost:3000', description: 'Servidor local' }
-            ],
             components: {
                 securitySchemes: {
                     bearerAuth: {
                         type: 'http',
                         scheme: 'bearer',
                         bearerFormat: 'JWT',
-                        description: 'Token JWT para autenticación. Inclúyelo como: Bearer <token>'
+                        description: 'Token JWT para autenticación'
                     }
                 }
             }
-        },
-        exposeRoute: true,
-        swagger: {
-            tags: [
-                { name: 'Auth', description: 'Registro, login y autenticación de usuarios' },
-                { name: 'Recomendaciones', description: 'Obtención de recomendaciones de películas' },
-                { name: 'Sistema', description: 'Estado y estadísticas del servidor' },
-                { name: 'Telegram', description: 'Integración y prueba de API para Telegram' }
-            ]
         }
     });
 
@@ -154,49 +138,76 @@ export async function startServer() {
 
     // Endpoint principal para pedir recomendaciones de películas (requiere JWT)
     fastify.post('/api/query', {
-        schema: {
-            tags: ['Recomendaciones'],
-            summary: 'Obtener recomendaciones de películas',
-            description: 'Devuelve recomendaciones personalizadas de películas usando IA. Requiere autenticación JWT.',
-            security: [{ bearerAuth: [] }],
-            body: {
+    preHandler: authenticateToken,
+    schema: {
+        security: [{ bearerAuth: [] }],
+        body: {
+            type: 'object',
+            required: ['query'],
+            properties: {
+                query: { type: 'string' }
+            }
+        },
+        response: {
+            200: {
                 type: 'object',
-                required: ['query'],
                 properties: {
-                    query: {
-                        type: 'string',
-                        minLength: 1,
-                        description: 'Consulta o preferencias del usuario para la recomendación.'
+                    status: { type: 'string' },
+                    response: {
+                        type: 'object',
+                        properties: {
+                            messageId: { type: 'string' },
+                            timestamp: { type: 'string' },
+                            type: { type: 'string' },
+                            correlationId: { type: 'string' },
+                            payload: {
+                                type: 'object',
+                                properties: {
+                                    result: { type: 'string' }
+                                }
+                            }
+                        }
                     }
                 }
             },
-            response: {
-                200: {
-                    description: 'Respuesta con recomendaciones',
-                    type: 'object',
-                    properties: {
-                        success: { type: 'boolean' },
-                        data: {
-                            type: 'string',
-                            description: 'Respuesta JSON del modelo IA con recomendaciones.'
-                        }
-                    }
-                },
-                401: {
-                    description: 'No autorizado',
-                    type: 'object',
-                    properties: { message: { type: 'string' } }
+            400: {
+                type: 'object',
+                properties: {
+                    error: { type: 'string' }
+                }
+            },
+            500: {
+                type: 'object',
+                properties: {
+                    error: { type: 'string' }
                 }
             }
-        },
-        preHandler: authenticateToken
-    }, async function (request, reply) {
+        }
+    }
+    }, async (request, reply) => {
+        const { query } = request.body || {};
+
+        if (!query) {
+            return reply.code(400).send({
+                error: 'Falta el campo "query"'
+            });
+        }
+
         try {
-            const respuestaIA = await llmCall(request.body.query);
-            return { success: true, data: respuestaIA };
-        } catch (error) {
-            console.error('Error en /api/query:', error);
-            return reply.code(500).send({ error: "Error en la IA" });
+            const llmResponse = await sendLlmRequest({
+                query,
+                user: request.user
+            });
+
+            return reply.code(200).send({
+                status: 'success',
+                response: llmResponse
+            });
+        }catch (error) {
+            console.error(error);
+            return reply.code(500).send({
+                error: 'Error procesando la petición con RabbitMQ'
+            });
         }
     });
 
