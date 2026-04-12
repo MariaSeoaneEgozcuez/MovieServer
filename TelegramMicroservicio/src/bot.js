@@ -95,7 +95,7 @@ bot.help((ctx) => {
 // Comando /status: consulta el estado del backend
 bot.command('status', async (ctx) => {
     try {
-        const response = await axios.get(`${apiBaseUrl}/api/status`);
+        // const response = await axios.get(`${apiBaseUrl}/api/status`);
         const data = response.data;
         ctx.reply(`Estado del sistema:\n${data.status}: ${data.message}`);
     } catch (error) {
@@ -108,7 +108,7 @@ bot.command('status', async (ctx) => {
 // Comando /stats: muestra estadísticas del sistema
 bot.command('stats', async (ctx) => {
     try {
-        const response = await axios.get(`${apiBaseUrl}/api/stats`);
+        // const response = await axios.get(`${apiBaseUrl}/api/stats`);
         const data = response.data;
         if (data?.status === 'success' && data?.stats) {
             const stats = data.stats;
@@ -172,13 +172,28 @@ bot.command('logout', async (ctx) => {
 
 
 // Función auxiliar para registrar un usuario llamando a la API
-async function callRegister(username, email, password) {
-    return axios.post(`${apiBaseUrl}/api/auth/register`, { username, email, password });
+async function callRegister(username, email, password, token) {
+    // CAMBIO: Enviar el mensaje a RabbitMQ en lugar de llamar directamente a la API
+    return sendToQueue({
+        action: 'register',
+        username,
+        email,
+        password,
+        token
+    });
+    // return axios.post(`${apiBaseUrl}/api/auth/register`, { username, email, password });
 }
 
 // Función auxiliar para hacer login llamando a la API
 async function callLogin(username, password) {
-    return axios.post(`${apiBaseUrl}/api/auth/login`, { username, password });
+    // CAMBIO: Enviar el mensaje a RabbitMQ en lugar de llamar directamente a la API
+    return sendToQueue({
+        action: 'login',
+        username,
+        password,
+        
+    });
+    // return axios.post(`${apiBaseUrl}/api/auth/login`, { username, password });
 }
 
 // Función auxiliar para pedir recomendaciones a la API
@@ -187,11 +202,15 @@ async function callRecommendation(ctx, query) {
     if (!token) {
         throw new Error('No autorizado');
     }
-    const response = await axios.post(`${apiBaseUrl}/api/query`, { query }, {
-        headers: authHeaders(token)
+    // const response = await axios.post(`${apiBaseUrl}/api/query`, { query }, {
+    //     headers: authHeaders(token)
+    // });
+    const response = await sendToQueue({
+        action: 'recommendation',
+        query,
+        token,
     });
 
-    return formatRecommendationResponse(response.data);
 }
 
 
@@ -233,6 +252,7 @@ bot.on('text', async (ctx) => {
                 ctx.session.state = 'login_password';
                 ctx.reply('Introduce tu contraseña.');
                 return;
+
             case 'login_password':
                 ctx.session.pending.password = text;
                 try {
@@ -266,7 +286,10 @@ bot.on('text', async (ctx) => {
         sendToQueue({
             query: text,
             chatId: ctx.chat.id, 
+            token: ctx.session.token,
         });
+
+        ctx.reply('Buscando recomendaciones para ti... Esto puede tardar unos segundos.');
 
     } catch (error) {
         //const errorText = error.response?.data?.error || error.message;
@@ -275,11 +298,19 @@ bot.on('text', async (ctx) => {
         //     ctx.session.token = null;
         //     ctx.session.user = null;
         // } else {
-            ctx.reply(`Error al obtener recomendación: ${errorText}`);
+            ctx.reply(`Error al obtener recomendación: ${error.message}`);
         //}
     }
 });
 
+await createChannel(); // Creamos la conexión y el canal de RabbitMQ antes de lanzar el bot
+
+consumeFromQueue(async (data) => {
+    console.log("Mensaje recibido en bot.js desde RabbitMQ:",data);
+    const message = formatRecommendationResponse(data);
+
+    bot.telegram.sendMessage(data.chatId, message);
+});
 
 // Lanzamos el bot y, si está configurado, enviamos un mensaje de bienvenida al chat indicado
 bot.launch()
