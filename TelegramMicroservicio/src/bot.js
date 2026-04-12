@@ -3,7 +3,7 @@
 import config from 'config'; // Para leer la configuración del sistema
 // import axios from 'axios'; // Para hacer peticiones HTTP a la API
 import { Telegraf, session } from 'telegraf'; // Telegraf es la librería para crear el bot de Telegram
-
+import { sendToQueue, consumeFromQueue, createChannel } from './rabbit.js'; // Funciones para interactuar con RabbitMQ
 
 // Creamos la instancia del bot de Telegram usando el token configurado
 const bot = new Telegraf(config.get('telegram.botToken'));
@@ -261,17 +261,22 @@ bot.on('text', async (ctx) => {
 
     // Si está autenticado, procesamos la petición de recomendación
     try {
-        const recommendation = await callRecommendation(ctx, text);
-        ctx.reply(recommendation);
+        // const recommendation = await callRecommendation(ctx, text);
+        // ctx.reply(recommendation);
+        sendToQueue({
+            query: text,
+            chatId: ctx.chat.id, 
+        });
+
     } catch (error) {
-        const errorText = error.response?.data?.error || error.message;
-        if (errorText.toLowerCase().includes('autorizado') || error.response?.status === 401 || error.response?.status === 403) {
-            ctx.reply('Tu sesión expiró o no es válida. Usa /login para iniciar sesión de nuevo.');
-            ctx.session.token = null;
-            ctx.session.user = null;
-        } else {
+        //const errorText = error.response?.data?.error || error.message;
+        // if (errorText.toLowerCase().includes('autorizado') || error.response?.status === 401 || error.response?.status === 403) {
+        //     ctx.reply('Tu sesión expiró o no es válida. Usa /login para iniciar sesión de nuevo.');
+        //     ctx.session.token = null;
+        //     ctx.session.user = null;
+        // } else {
             ctx.reply(`Error al obtener recomendación: ${errorText}`);
-        }
+        //}
     }
 });
 

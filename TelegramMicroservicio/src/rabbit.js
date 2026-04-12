@@ -34,8 +34,7 @@ async function consumeFromQueue(callback) {
         console.log("Mensaje recibido de RabbitMQ:", data);
         callback(data); // Se llama al callback con los datos recibidos
 
-        channel.ack(msg); 
-        // CAMBIOS
+        channel.ack(msg);
     });
 
 }
