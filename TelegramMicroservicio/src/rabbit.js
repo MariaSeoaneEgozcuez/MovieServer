@@ -1,4 +1,4 @@
-import {connect} from 'amqplib';
+import { connect } from 'amqplib';
 import { v4 as uuidv4 } from 'uuid';
 
 let channel;
@@ -27,90 +27,78 @@ async function createChannel() {
         const correlationId = msg.properties.correlationId; // Se obtiene el id para saber a qué está respondiendo
         const pending = pendingRequests.get(correlationId); // Se busca el mensaje pendiente con ese id
         if (pending) {
-            const text = msg.content.toString();
-            const data = JSON.parse(text);
-            pending.resolve(data); // Se resuelve la promesa con los datos recibidos
-            pendingRequests.delete(correlationId); // Se elimina el mensaje pendiente
+            try {
+                const text = msg.content.toString();
+                const data = JSON.parse(text);
+                pending.resolve(data);
+            } catch (error) {
+                pending.reject(error);
+            } finally {
+                pendingRequests.delete(correlationId);
+            }
         }
         channel.ack(msg); // Acknowledge del mensaje
     });
 
-
-    console.log("Conectado a RabbitMQ");
+    console.log('Conectado a RabbitMQ');
 }
 
-// Función para enviar mensajes a la cola de RMQ
-async function sendToQueueRecommendation(data, timeout = 10000) {
-    // Ver si el canal está inicializado, si no, lanzar un error
-    if (!channel) throw new Error("Channel not initialized"); 
+// Función promesa, se usa en todas las funciones Send, menos codigo
+function createRequestPromise(correlationId, timeout, resolve, reject) {
+    const timer = setTimeout(() => {
+        pendingRequests.delete(correlationId);
+        reject(new Error('Timeout waiting for response'));
+    }, timeout);
 
-    const correlationId = uuidv4(); // Generar ID único para el mensaje
-    const message = JSON.stringify(data); // Se mandan siempre en JSON
-
-    return new Promise((resolve, reject) => {
-        // En caso de que termine el timeout, se rechaza con un error (control)
-        const timer = setTimeout(() => {
-            pendingRequests.delete(correlationId); // Se elimina el mensaje pendiente si se agota el tiempo
-            reject(new Error("Timeout waiting for response")); // Se rechaza la promesa por timeout
-        }, timeout);
-
-        pendingRequests.set(correlationId, { // Añadir la promesa en "pendientes"
-            // En caso de éxito, se limpia el timeout y se resuelve la promesa con la respuesta recibida
-            resolve: (response) => {
-                clearTimeout(timer);
-                resolve(response);
-            },
-            
-            // En caso de error, se limpia el timeout y se rechaza la promesa
-            reject: (error) => {
-                clearTimeout(timer);
-                reject(error);
-            }
-
-        });
-
-        channel.sendToQueue("recommendation.request", Buffer.from(message), { 
-            correlationId: correlationId,
-            replyTo: "telegram.response"
-        });
-
-        console.log("Mensaje enviado a RabbitMQ:", message, "con correlationId:", correlationId);
+    pendingRequests.set(correlationId, {
+        resolve: (response) => {
+            clearTimeout(timer);
+            resolve(response);
+        },
+        reject: (error) => {
+            clearTimeout(timer);
+            reject(error);
+        }
     });
 }
 
+async function sendToQueue(queue, data, timeout = 10000) {
+    if (!channel) throw new Error('Channel not initialized');
 
-async function sendToQueueAuth(queue, data, timeout = 10000) {
-    if (!channel) throw new Error("Channel not initialized");
-
-    const correlationID = uuidv4();
+    const correlationId = uuidv4();
     const message = JSON.stringify(data);
 
     return new Promise((resolve, reject) => {
-        const timer = set.timeout(() => {
-            pendingRequests.delete(correlationID);
-            reject(new Error("Timeout waiting for response"));          
-        }, timeout);
+        createRequestPromise(correlationId, timeout, resolve, reject);
 
-        pendingRequests.set(correlationID,{
-            resolve: (response) => {
-                clearTimeout(timer);
-                resolve(response);                
-            },
-
-            reject: (error) => {
-                clearTimeout(timer);
-                reject(error);
-            }
-        })
-
-        channel.sendToQueue("auth.login.request", Buffer.from(message), {
-            correlationId: correlationID,
-            replyTo: "telegram.response"
+        channel.sendToQueue(queue, Buffer.from(message), {
+            correlationId,
+            replyTo: 'telegram.response'
         });
 
-        console.log("Mensaje enviado a RabbitMQ:", message, "con correlationId:", correlationID);
+        console.log('Mensaje enviado a RabbitMQ:', message, 'con correlationId:', correlationId, 'a cola:', queue);
     });
 }
 
-// Exportar las funciones necesarias
-export { createChannel, sendToQueueRecommendation, sendToQueueAuth };
+async function sendToQueueRecommendation(data, timeout = 10000) {
+    return sendToQueue('recommendation.request', data, timeout);
+}
+
+async function sendToQueueAuth(queue, data, timeout = 10000) {
+    if (queue !== 'auth.login.request' && queue !== 'auth.register.request') {
+        throw new Error('Invalid auth queue');
+    }
+    return sendToQueue(queue, data, timeout);
+}
+
+async function sendToQueueSystem(data, timeout = 10000) {
+    return sendToQueue('systemStatus.request', data, timeout);
+}
+
+export {
+    createChannel,
+    sendToQueue,
+    sendToQueueRecommendation,
+    sendToQueueAuth,
+    sendToQueueSystem
+};
