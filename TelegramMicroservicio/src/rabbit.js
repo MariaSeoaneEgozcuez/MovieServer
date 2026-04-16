@@ -78,12 +78,14 @@ function createRequestPromise(correlationId, timeout, resolve, reject){
 export async function sendRequest(routingKey, data, timeout = 10000){
     if (!channel) throw new Error('RabbitMQ no inicializado');
 
-    const correlationId = uuidv4();              
-    const message = JSON.stringify(data);        
+    const correlationId = uuidv4(); // Crear un id único para cada petición
+    const message = JSON.stringify(data); 
 
+    // Devolver una promesa que se resolverá cuando llegue la respuesta o se alcance el timeout
     return new Promise((resolve, reject) => {   
         createRequestPromise(correlationId, timeout, resolve, reject);
 
+        // Publicar el mensaje en el exchange con la routingKey y las propiedades necesarias
         channel.publish(
             exchange,
             routingKey,
@@ -98,7 +100,7 @@ export async function sendRequest(routingKey, data, timeout = 10000){
     });
 }
 
-
+// Funciones específicas para cada tipo de petición, que simplemente llaman a sendRequest con el routingKey adecuado
 export const sendAuthLogin = (data) =>
     sendRequest('auth.login', data);
 
