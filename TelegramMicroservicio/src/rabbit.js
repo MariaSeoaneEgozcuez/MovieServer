@@ -2,103 +2,111 @@ import { connect } from 'amqplib';
 import { v4 as uuidv4 } from 'uuid';
 
 let channel;
-const pendingRequests = new Map(); // Mapa para almacenar las promesas pendientes
+const pendingRequests = new Map();
 
-// Función para crear la conexión y el canal de RabbitMQ
-async function createChannel() {
-    const connection = await connect(process.env.RABBIT_URL); // Se conecta a RabbitMQ usando la URL del entorno
+const exchange = 'microservices';
+const responseQueue = 'telegram.response';
+
+export async function initRabbitMQ() {
+    const connection = await connect(process.env.RABBITMQ_URL);
     channel = await connection.createChannel();
 
-    // Se aseguran las colas necesarias para enviar y recibir mensajes
-    await channel.assertQueue("recommendation.request");
+    // Crear el exchange común
+    await channel.assertExchange(exchange, 'direct', { durable: true });
 
-    // Se aseguran las colas para la autentificación
-    await channel.assertQueue("auth.login.request");
-    await channel.assertQueue("auth.register.request");
+    // Crear la cola donde llegan las respuestas
+    await channel.assertQueue(responseQueue, { durable: true });
 
-    // Se aseguran las colas para el estado del sistema
-    await channel.assertQueue("systemStatus.request");
+    // Binding para unir todo
+    await channel.bindQueue(
+        responseQueue, 
+        exchange, 
+        responseQueue // Pattern o routingKey, es el tag que se usa para que venga a la cola de telegram
+    );
 
-    // Hacer una unica cola para el consume
-    await channel.assertQueue("telegram.response");
+    channel.consume(responseQueue, (msg) => {
+        if (!msg) return;
 
-    await channel.consume("telegram.response", (msg) => {
-        if (!msg) return; // Si no hay nada, no se hace nada
-        const correlationId = msg.properties.correlationId; // Se obtiene el id para saber a qué está respondiendo
-        const pending = pendingRequests.get(correlationId); // Se busca el mensaje pendiente con ese id
+        const correlationId = msg.properties.correlationId;
+        const pending = pendingRequests.get(correlationId);
+
         if (pending) {
-            try {
-                const text = msg.content.toString();
-                const data = JSON.parse(text);
-                pending.resolve(data);
+            try{
+                const data = JSON.parse(msg.content.toString()); // transformar el json en un string
+                pending.resolve(data); // resolver con el mensaje de respuesta
             } catch (error) {
-                pending.reject(error);
+                pending.reject(error); // si hay error, reject it
             } finally {
-                pendingRequests.delete(correlationId);
+                pendingRequests.delete(correlationId); // eliminar el id de una forma u otra
             }
         }
-        channel.ack(msg); // Acknowledge del mensaje
+
+        channel.ack(msg);
+        
     });
 
-    console.log('Conectado a RabbitMQ');
-}
+    console.log('RabbitMQ listo')
 
-// Función promesa, se usa en todas las funciones Send, menos codigo
-function createRequestPromise(correlationId, timeout, resolve, reject) {
+}
+// Promise
+function createRequestPromise(correlationId, timeout, resolve, reject){
+
+    // Crear el timeout y si se acaba eliminar el correlationId y dar un error de Timeout
     const timer = setTimeout(() => {
         pendingRequests.delete(correlationId);
-        reject(new Error('Timeout waiting for response'));
+        reject(new Error('Timeout'));
     }, timeout);
 
+    // Si llega notificación de llegada, metemos la info en el Map de pendigRequests
     pendingRequests.set(correlationId, {
-        resolve: (response) => {
+
+        // Si hay datos que añadir, se borra el timeout y se resuelve
+        resolve : (data) => {
             clearTimeout(timer);
-            resolve(response);
+            resolve(data);
         },
-        reject: (error) => {
+
+        // Si hay errores, re hace un reject sin olvidar borrar el timer
+        reject : (error) => {
             clearTimeout(timer);
             reject(error);
         }
     });
 }
 
-async function sendToQueue(queue, data, timeout = 10000) {
-    if (!channel) throw new Error('Channel not initialized');
 
-    const correlationId = uuidv4();
-    const message = JSON.stringify(data);
+export async function sendRequest(routingKey, data, timeout = 10000){
+    if (!channel) throw new Error('RabbitMQ no inicializado');
 
-    return new Promise((resolve, reject) => {
+    const correlationId = uuidv4();              
+    const message = JSON.stringify(data);        
+
+    return new Promise((resolve, reject) => {   
         createRequestPromise(correlationId, timeout, resolve, reject);
 
-        channel.sendToQueue(queue, Buffer.from(message), {
-            correlationId,
-            replyTo: 'telegram.response'
-        });
+        channel.publish(
+            exchange,
+            routingKey,
+            Buffer.from(message),
+            {
+                correlationId,
+                replyTo: responseQueue
+            }
+        );
 
-        console.log('Mensaje enviado a RabbitMQ:', message, 'con correlationId:', correlationId, 'a cola:', queue);
+        console.log(`Enviado: ${routingKey}`, data);
     });
 }
 
-async function sendToQueueRecommendation(data, timeout = 10000) {
-    return sendToQueue('recommendation.request', data, timeout);
-}
 
-async function sendToQueueAuth(queue, data, timeout = 10000) {
-    if (queue !== 'auth.login.request' && queue !== 'auth.register.request') {
-        throw new Error('Invalid auth queue');
-    }
-    return sendToQueue(queue, data, timeout);
-}
+export const sendAuthLogin = (data) =>
+    sendRequest('auth.login', data);
 
-async function sendToQueueSystem(data, timeout = 10000) {
-    return sendToQueue('systemStatus.request', data, timeout);
-}
+export const sendAuthRegister = (data) =>
+    sendRequest('auth.register', data);
 
-export {
-    createChannel,
-    sendToQueue,
-    sendToQueueRecommendation,
-    sendToQueueAuth,
-    sendToQueueSystem
-};
+export const sendRecommendation = (data) =>
+    sendRequest('recommendation.get', data);
+
+export const sendSystemStatus = (data) =>
+    sendRequest('system.status', data);
