@@ -1,4 +1,4 @@
-import { initRabbitMQ, sendAuthLogin, sendAuthRegister, sendRecommendation, sendSystemStatus } from './rabbit.js'; // 🔥 CAMBIO (quitado sendRequest innecesario)
+import { initRabbitMQ, sendAuthLogin, sendAuthRegister, sendRecommendation, sendSystemStatus } from './rabbit.js';
 // Importamos las dependencias necesarias
 import config from 'config'; // Para leer la configuración del sistema
 //import axios from 'axios'; // Para hacer peticiones HTTP a la API
