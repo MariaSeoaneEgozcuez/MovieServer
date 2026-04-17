@@ -1,0 +1,23 @@
+{
+  "name": "bbdd-service",
+  "version": "1.0.0",
+  "description": "Servicio de persistencia de datos para MovieServer",
+  "type": "module",
+  "main": "src/bbdd-service.js",
+  "scripts": {
+    "start": "node src/bbdd-service.js",
+    "dev": "node --watch=. src/bbdd-service.js"
+  },
+  "dependencies": {
+    "fastify": "^5.8.4",
+    "@fastify/healthcheck": "^10.0.1",
+    "sqlite": "^5.1.1",
+    "sqlite3": "^6.0.1",
+    "amqplib": "^1.0.3",
+    "config": "^4.2.0",
+    "uuid": "^13.0.0",
+    "bcrypt": "^6.0.0",
+    "pino": "^9.0.0",
+    "pino-pretty": "^10.0.0"
+  }
+}

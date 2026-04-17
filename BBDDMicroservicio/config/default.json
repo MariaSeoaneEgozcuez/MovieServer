@@ -1,0 +1,18 @@
+{
+  "bbdd": {
+    "port": 3003,
+    "host": "0.0.0.0"
+  },
+  "db": {
+    "filename": "./bbdd.db",
+    "poolSize": 5,
+    "timeout": 5000
+  },
+  "rabbitmq": {
+    "url": "amqp://guest:guest@rabbitmq:5672",
+    "prefetch": 1
+  },
+  "logging": {
+    "level": "info"
+  }
+}
