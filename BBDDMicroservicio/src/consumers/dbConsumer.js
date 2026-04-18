@@ -114,7 +114,7 @@ export async function startDBConsumer() {
  * Procesar mensajes RPC según operación
  */
 async function processRequest(request) {
-  const { operation, payload } = request;
+  const { operation, payload } = request.payload || {};
 
   switch (operation) {
     case 'user.get_by_username':
@@ -164,7 +164,6 @@ async function processRequest(request) {
       throw new Error(`Unknown operation: ${operation}`);
   }
 }
-
 /**
  * Cerrar conexión a RabbitMQ
  */
