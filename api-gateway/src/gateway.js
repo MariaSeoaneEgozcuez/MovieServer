@@ -130,9 +130,9 @@ async function startGateway() {
 
   try {
     await fastify.listen({ port, host });
-    fastify.log.info(`↓ API Gateway escuchando en http://${host}:${port}`);
-    fastify.log.info(`↓ Documentación disponible en http://${host}:${port}/api/docs`);
-    fastify.log.info(`↓ Health check en http://${host}:${port}/health`);
+    fastify.log.info(`API Gateway escuchando en http://${host}:${port}`);
+    fastify.log.info(`Documentación disponible en http://${host}:${port}/api/docs`);
+    fastify.log.info(`Health check en http://${host}:${port}/health`);
   } catch (error) {
     fastify.log.error('Error iniciando API Gateway:');
     fastify.log.error(error);

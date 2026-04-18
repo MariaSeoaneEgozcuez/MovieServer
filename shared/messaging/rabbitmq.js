@@ -3,12 +3,10 @@ import amqp from 'amqplib';
 let connection = null;
 let channel = null;
 
-const RABBITMQ_URL = process.env.RABBITMQ_URL || 'amqp://localhost:5672';
+const RABBITMQ_URL = process.env.RABBITMQ_URL || 'amqp://guest:guest@localhost:5672';
 
 export async function connectRabbitMQ() {
-    if (channel) {
-        return channel;
-    }
+    if (channel) return channel;
 
     connection = await amqp.connect(RABBITMQ_URL);
 
@@ -25,20 +23,7 @@ export async function connectRabbitMQ() {
     });
 
     channel = await connection.createChannel();
+    console.log('RabbitMQ conectado en:', RABBITMQ_URL);
 
     return channel;
-}
-
-export async function closeRabbitMQ() {
-    try {
-        if (channel) {
-            await channel.close();
-        }
-        if (connection) {
-            await connection.close();
-        }
-    } finally {
-        channel = null;
-        connection = null;
-    }
 }

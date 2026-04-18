@@ -6,12 +6,14 @@ let connection = null;
 let channel = null;
 const pendingRequests = new Map();
 
-const RABBITMQ_URL = process.env.RABBITMQ_URL || config.get('rabbitmq.url') || 'amqp://localhost:5672';
+const RABBITMQ_URL =
+  process.env.RABBITMQ_URL ||
+  (config.has('rabbitmq.url')
+    ? config.get('rabbitmq.url')
+    : 'amqp://guest:guest@localhost:5672');
+
 const REPLY_QUEUE = 'gateway.reply';
 
-/**
- * Conecta a RabbitMQ si aún no está conectado
- */
 export async function connectRabbitMQ() {
   if (channel) {
     return channel;
@@ -21,7 +23,6 @@ export async function connectRabbitMQ() {
     connection = await amqp.connect(RABBITMQ_URL);
     channel = await connection.createChannel();
 
-    // Manejar reconexión
     connection.on('error', (err) => {
       console.error('RabbitMQ connection error:', err.message);
       connection = null;
@@ -34,10 +35,8 @@ export async function connectRabbitMQ() {
       channel = null;
     });
 
-    // Crear cola de respuestas del Gateway
     await channel.assertQueue(REPLY_QUEUE, { durable: true });
 
-    // Consumir respuestas
     await channel.consume(
       REPLY_QUEUE,
       (msg) => {
@@ -49,6 +48,7 @@ export async function connectRabbitMQ() {
         if (pending) {
           try {
             const content = JSON.parse(msg.content.toString());
+            console.log(`[RPC] Response received for correlationId ${correlationId}`);
             pending.resolve(content);
           } catch (error) {
             pending.reject(new Error(`Failed to parse response: ${error.message}`));
@@ -62,7 +62,7 @@ export async function connectRabbitMQ() {
       { noAck: false }
     );
 
-    console.log('Connected to RabbitMQ successfully');
+    console.log(`Connected to RabbitMQ successfully: ${RABBITMQ_URL}`);
     return channel;
   } catch (error) {
     console.error('Failed to connect to RabbitMQ:', error.message);
@@ -70,9 +70,6 @@ export async function connectRabbitMQ() {
   }
 }
 
-/**
- * Desconectar de RabbitMQ
- */
 export async function closeRabbitMQ() {
   try {
     if (channel) {
@@ -87,18 +84,10 @@ export async function closeRabbitMQ() {
   }
 }
 
-/**
- * Enviar RPC request a un servicio y esperar respuesta
- * @param {string} queue - Cola a la que enviar
- * @param {object} payload - Datos a enviar
- * @param {number} timeout - Timeout en ms
- * @returns {Promise} respuesta del servicio
- */
 export async function sendRPCRequest(queue, payload, timeout = 30000) {
   const ch = await connectRabbitMQ();
   const correlationId = uuidv4();
 
-  // Crear cola si no existe
   await ch.assertQueue(queue, { durable: true });
 
   return new Promise((resolve, reject) => {
@@ -107,7 +96,6 @@ export async function sendRPCRequest(queue, payload, timeout = 30000) {
       reject(new Error(`RPC timeout for queue ${queue} after ${timeout}ms`));
     }, timeout);
 
-    // Guardar pending request
     pendingRequests.set(correlationId, {
       resolve: (data) => {
         clearTimeout(timer);
@@ -119,7 +107,6 @@ export async function sendRPCRequest(queue, payload, timeout = 30000) {
       }
     });
 
-    // Publicar mensaje
     const message = {
       messageId: uuidv4(),
       timestamp: new Date().toISOString(),
@@ -138,9 +125,6 @@ export async function sendRPCRequest(queue, payload, timeout = 30000) {
   });
 }
 
-/**
- * Publicar un evento a un exchange (Pub/Sub)
- */
 export async function publishEvent(exchangeName, routingKey, payload) {
   const ch = await connectRabbitMQ();
 
@@ -166,18 +150,15 @@ export async function publishEvent(exchangeName, routingKey, payload) {
   console.log(`[PUBLISH] Event to exchange ${exchangeName}:${routingKey}`);
 }
 
-/**
- * Health check: Verificar conexión a RabbitMQ
- */
 export async function checkRabbitMQHealth() {
   try {
-    const ch = await connectRabbitMQ();
+    await connectRabbitMQ();
     return { status: 'up', url: RABBITMQ_URL };
   } catch (error) {
-    return { 
-      status: 'down', 
+    return {
+      status: 'down',
       url: RABBITMQ_URL,
-      error: error.message 
+      error: error.message
     };
   }
 }

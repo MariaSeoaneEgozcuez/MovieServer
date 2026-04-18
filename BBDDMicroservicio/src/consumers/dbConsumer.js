@@ -2,20 +2,24 @@ import amqp from 'amqplib';
 import config from 'config';
 import * as userService from '../services/userService.js';
 import * as tokenService from '../services/tokenService.js';
-import { logOperation } from './utils.js';
 
 let channel = null;
+let connection = null;
 
-const RABBITMQ_URL = process.env.RABBITMQ_URL || config.get('rabbitmq.url');
+const RABBITMQ_URL =
+  process.env.RABBITMQ_URL ||
+  (config.has('rabbitmq.url')
+    ? config.get('rabbitmq.url')
+    : 'amqp://guest:guest@localhost:5672');
+
 const REQUEST_QUEUE = 'bbdd.requests';
-const RESPONSE_QUEUE = 'gateway.reply';
 
 /**
  * Conectar y configurar consumer de RabbitMQ
  */
 export async function startDBConsumer() {
   try {
-    const connection = await amqp.connect(RABBITMQ_URL);
+    connection = await amqp.connect(RABBITMQ_URL);
 
     connection.on('error', (err) => {
       console.error('RabbitMQ connection error:', err.message);
@@ -23,72 +27,80 @@ export async function startDBConsumer() {
 
     connection.on('close', () => {
       console.error('RabbitMQ connection closed');
+      channel = null;
+      connection = null;
     });
 
     channel = await connection.createChannel();
 
-    // Crear cola de requests
     await channel.assertQueue(REQUEST_QUEUE, { durable: true });
 
-    // Crear cola de respuestas
-    await channel.assertQueue(RESPONSE_QUEUE, { durable: true });
-
-    // Prefetch: procesar un mensaje a la vez
-    await channel.prefetch(config.get('rabbitmq.prefetch') || 1);
+    await channel.prefetch(
+      config.has('rabbitmq.prefetch') ? config.get('rabbitmq.prefetch') : 1
+    );
 
     console.log(`✓ BBDD Consumer listening on ${REQUEST_QUEUE}`);
+    console.log(`✓ RabbitMQ URL: ${RABBITMQ_URL}`);
 
-    // Empezar a consumir
     channel.consume(REQUEST_QUEUE, async (msg) => {
       if (!msg) return;
 
       const startTime = Date.now();
       const correlationId = msg.properties.correlationId;
+      const replyTo = msg.properties.replyTo;
 
       try {
         const request = JSON.parse(msg.content.toString());
 
-        console.log(`[RPC] Received: ${request.operation} (${correlationId})`);
+        console.log(`[BBDD RPC] Received operation "${request.operation}" (${correlationId})`);
 
-        // Procesar request según operación
         const response = await processRequest(request);
 
-        // Responder
-        channel.sendToQueue(
-          RESPONSE_QUEUE,
-          Buffer.from(JSON.stringify(response)),
-          {
-            correlationId,
-            contentType: 'application/json'
-          }
-        );
-
-        const duration = Date.now() - startTime;
-        console.log(`[RPC] Responded: ${request.operation} in ${duration}ms`);
-
-        // Acknowledge
-        channel.ack(msg);
-      } catch (error) {
-        console.error(`[RPC ERROR] ${error.message}`, error);
-
-        // Responder con error
-        try {
+        if (replyTo) {
           channel.sendToQueue(
-            RESPONSE_QUEUE,
-            Buffer.from(JSON.stringify({
-              error: error.message || 'Internal server error',
-              status: error.status || 500
-            })),
+            replyTo,
+            Buffer.from(JSON.stringify(response)),
             {
               correlationId,
+              persistent: true,
               contentType: 'application/json'
             }
           );
-        } catch (sendError) {
-          console.error('Failed to send error response:', sendError.message);
+        } else {
+          console.warn('[BBDD RPC] No replyTo provided, response not sent');
         }
 
-        // Acknowledge de todas formas
+        const duration = Date.now() - startTime;
+        console.log(`[BBDD RPC] Responded "${request.operation}" in ${duration}ms`);
+
+        channel.ack(msg);
+      } catch (error) {
+        const errorMessage = error?.message || 'Internal server error';
+        const errorStatus = error?.status || 500;
+
+        console.error(`[BBDD RPC ERROR] ${errorMessage}`, error);
+
+        try {
+          if (replyTo) {
+            channel.sendToQueue(
+              replyTo,
+              Buffer.from(JSON.stringify({
+                error: errorMessage,
+                status: errorStatus
+              })),
+              {
+                correlationId,
+                persistent: true,
+                contentType: 'application/json'
+              }
+            );
+          } else {
+            console.warn('[BBDD RPC ERROR] No replyTo provided, error response not sent');
+          }
+        } catch (sendError) {
+          console.error('[BBDD RPC ERROR] Failed to send error response:', sendError.message);
+        }
+
         channel.ack(msg);
       }
     });
@@ -105,7 +117,6 @@ async function processRequest(request) {
   const { operation, payload } = request;
 
   switch (operation) {
-    // USER OPERATIONS
     case 'user.get_by_username':
       return await userService.getUserbyUsername(payload.username);
 
@@ -128,7 +139,6 @@ async function processRequest(request) {
     case 'user.delete':
       return await userService.deleteUser(payload.userId);
 
-    // TOKEN OPERATIONS
     case 'token.revoke':
       return await tokenService.revokeToken(
         payload.token,
@@ -144,7 +154,6 @@ async function processRequest(request) {
     case 'token.stats':
       return await tokenService.getRevokedTokensStats();
 
-    // STATS OPERATIONS
     case 'stats.system':
       return await userService.getSystemStats();
 
@@ -152,10 +161,7 @@ async function processRequest(request) {
       return await tokenService.getRevokedTokensStats();
 
     default:
-      throw {
-        status: 400,
-        message: `Unknown operation: ${operation}`
-      };
+      throw new Error(`Unknown operation: ${operation}`);
   }
 }
 
@@ -167,6 +173,11 @@ export async function closeDBConsumer() {
     if (channel) {
       await channel.close();
     }
+    if (connection) {
+      await connection.close();
+    }
+    channel = null;
+    connection = null;
     console.log('✓ BBDD Consumer closed');
   } catch (error) {
     console.error('Error closing BBDD Consumer:', error.message);

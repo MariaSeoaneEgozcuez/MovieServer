@@ -1,14 +1,32 @@
-import { initRabbitMQ, sendAuthLogin, sendAuthRegister, sendRecommendation, sendSystemStatus } from './rabbit.js';
-// Importamos las dependencias necesarias
+import {
+    initRabbitMQ,
+    sendRequest,
+    sendAuthLogin,
+    sendAuthRegister,
+    sendRecommendation,
+    sendSystemStatus,
+    sendSystemStats,
+    sendAuthLogout
+} from './rabbit.js';// Importamos las dependencias necesarias
 import config from 'config'; // Para leer la configuración del sistema
 //import axios from 'axios'; // Para hacer peticiones HTTP a la API
 import { Telegraf, session } from 'telegraf'; // Telegraf es la librería para crear el bot de Telegram
 
-const bot = new Telegraf(config.get('telegram.botToken'));
+const botToken =
+    process.env.TELEGRAM_BOT_TOKEN ||
+    (config.has('telegram.botToken') ? config.get('telegram.botToken') : null);
+
+if (!botToken) {
+    throw new Error('No se ha definido TELEGRAM_BOT_TOKEN ni telegram.botToken en config');
+}
+
+const bot = new Telegraf(botToken);
 bot.use(session());
 
-const apiBaseUrl = `http://localhost:${config.get('server.port')}`;
-const welcomeChatId = config.has('telegram.welcomeChatId') && config.get('telegram.welcomeChatId') ? config.get('telegram.welcomeChatId') : process.env.TELEGRAM_WELCOME_CHAT_ID || null;
+const serverPort =
+    process.env.SERVER_PORT ||
+    (config.has('server.port') ? config.get('server.port') : 3000);
+const apiBaseUrl = `http://localhost:${serverPort}`;const welcomeChatId = config.has('telegram.welcomeChatId') && config.get('telegram.welcomeChatId') ? config.get('telegram.welcomeChatId') : process.env.TELEGRAM_WELCOME_CHAT_ID || null;
 
 function resetFlow(ctx) {
     ctx.session = ctx.session || {};
@@ -81,17 +99,16 @@ bot.command('status', async (ctx) => {
 
 bot.command('stats', async (ctx) => {
     try {
-        const data = await sendRequest('system.stats', {}); 
-        if (data?.status === 'success' && data?.stats) { 
-            const stats = data.stats;
-            const lines = Object.entries(stats).map(([key, value]) => `${key}: ${value}`);
+        const data = await sendSystemStats();
+
+        if (data && typeof data === 'object') {
+            const lines = Object.entries(data).map(([key, value]) => `${key}: ${value}`);
             ctx.reply(`Estadísticas del sistema:\n${lines.join('\n')}`);
         } else {
             ctx.reply('No se pudieron obtener las estadísticas del sistema.');
         }
     } catch (error) {
-        const message = error.message; 
-        ctx.reply(`No se pudo consultar las estadísticas: ${message}`);
+        ctx.reply(`No se pudo consultar las estadísticas: ${error.message}`);
     }
 });
 
@@ -119,16 +136,19 @@ bot.command('logout', async (ctx) => {
         return;
     }
 
-    resetFlow(ctx);
-    ctx.session.token = null;
-    ctx.session.user = null;
+    const token = ctx.session.token;
+
     try {
-        await sendRequest('auth.logout', { token }); // RabbitMQ logout
+        await sendAuthLogout({ token });
     } catch (error) {
         console.error('Error en logout:', error.message);
     }
+
+    resetFlow(ctx);
+    ctx.session.token = null;
+    ctx.session.user = null;
+
     ctx.reply('Has cerrado sesión correctamente. Usa /login para volver a entrar.');
-    // (quitado axios logout, opcional implementarlo con Rabbit)
 });
 
 async function callRegister(username, email, password) {

@@ -7,15 +7,7 @@ import { setupRoutes } from './routes/api.routes.js';
 
 async function startBBDDService() {
   const fastify = Fastify({
-    logger: {
-      level: config.get('logging.level') || 'info',
-      transport: {
-        target: 'pino-pretty',
-        options: {
-          colorize: true
-        }
-      }
-    }
+    logger: true
   });
 
   // Conectar a la base de datos

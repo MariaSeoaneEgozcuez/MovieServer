@@ -1,4 +1,4 @@
-import { connectRabbitMQ } from '../../shared/messaging/rabbitmq.js';
+import { connectRabbitMQ } from '../shared/messaging/rabbitmq.js';
 
 const REQUEST_QUEUE = 'llm.requests';
 const RESPONSE_QUEUE = 'llm.responses';
@@ -15,15 +15,16 @@ export async function startLlmConsumer() {
 
     channel.prefetch(1);
 
-    console.log('LLM Service esperando mensajes en llm.requests...');
+    console.log(`LLM Service esperando mensajes en ${REQUEST_QUEUE}...`);
 
     channel.consume(REQUEST_QUEUE, async (msg) => {
         if (!msg) return;
 
         try {
             const request = JSON.parse(msg.content.toString());
-            const prompt = request?.payload?.query || request?.payload?.prompt || '';
+            console.log('[LLM] Mensaje recibido:', request);
 
+            const prompt = request?.payload?.query || request?.payload?.prompt || '';
             const result = await processPrompt(prompt);
 
             const response = {
@@ -36,18 +37,22 @@ export async function startLlmConsumer() {
                 }
             };
 
+            const replyTo = msg.properties.replyTo || RESPONSE_QUEUE;
+
             channel.sendToQueue(
-                RESPONSE_QUEUE,
+                replyTo,
                 Buffer.from(JSON.stringify(response)),
                 {
                     correlationId: request.correlationId,
-                    persistent: true
+                    persistent: true,
+                    contentType: 'application/json'
                 }
             );
 
+            console.log(`[LLM] Respuesta enviada a ${replyTo} con correlationId ${request.correlationId}`);
             channel.ack(msg);
         } catch (error) {
-            console.error('Error procesando mensaje LLM:', error.message);
+            console.error('[LLM] Error procesando mensaje:', error.message);
             channel.nack(msg, false, false);
         }
     });
