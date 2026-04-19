@@ -1,14 +1,15 @@
 import { initRabbitMQ, sendAuthLogin, sendAuthRegister, sendRecommendation, sendSystemStatus } from './rabbit.js'; // 🔥 CAMBIO (quitado sendRequest innecesario)
 // Importamos las dependencias necesarias
-import config from 'config'; // Para leer la configuración del sistema
+//import config from 'config'; // Para leer la configuración del sistema
 //import axios from 'axios'; // Para hacer peticiones HTTP a la API
 import { Telegraf, session } from 'telegraf'; // Telegraf es la librería para crear el bot de Telegram
+import 'dotenv/config'; 
 
-const bot = new Telegraf(config.get('telegram.botToken'));
+const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN);
 bot.use(session());
 
-const apiBaseUrl = `http://localhost:${config.get('server.port')}`;
-const welcomeChatId = config.has('telegram.welcomeChatId') && config.get('telegram.welcomeChatId') ? config.get('telegram.welcomeChatId') : process.env.TELEGRAM_WELCOME_CHAT_ID || null;
+//const apiBaseUrl = `http://localhost:${config.get('server.port')}`;
+const welcomeChatId = process.env.TELEGRAM_WELCOME_CHAT_ID || null;
 
 function resetFlow(ctx) {
     ctx.session = ctx.session || {};
