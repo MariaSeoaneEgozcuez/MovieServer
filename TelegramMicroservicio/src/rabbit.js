@@ -1,114 +1,127 @@
-import { connect } from 'amqplib';
+import amqp from 'amqplib';
 import { v4 as uuidv4 } from 'uuid';
 
-let channel;
+let connection = null;
+let channel = null;
 const pendingRequests = new Map();
 
-const exchange = 'microservices';
-const responseQueue = 'telegram.response';
+const RABBITMQ_URL = process.env.RABBITMQ_URL || 'amqp://guest:guest@localhost:5672';
+const REPLY_QUEUE = 'telegram.reply';
 
 export async function initRabbitMQ() {
-    const connection = await connect(process.env.RABBITMQ_URL);
+    if (channel) return channel;
+
+    connection = await amqp.connect(RABBITMQ_URL);
     channel = await connection.createChannel();
 
-    // Crear el exchange común
-    await channel.assertExchange(exchange, 'direct', { durable: true });
-
-    // Crear la cola donde llegan las respuestas
-    await channel.assertQueue(responseQueue, { durable: true });
-
-    // Binding para unir todo
-    await channel.bindQueue(
-        responseQueue, 
-        exchange, 
-        responseQueue // Pattern o routingKey, es el tag que se usa para que venga a la cola de telegram
-    );
-
-    channel.consume(responseQueue, (msg) => {
-        if (!msg) return;
-
-        const correlationId = msg.properties.correlationId;
-        const pending = pendingRequests.get(correlationId);
-
-        if (pending) {
-            try{
-                const data = JSON.parse(msg.content.toString()); // transformar el json en un string
-                pending.resolve(data); // resolver con el mensaje de respuesta
-            } catch (error) {
-                pending.reject(error); // si hay error, reject it
-            } finally {
-                pendingRequests.delete(correlationId); // eliminar el id de una forma u otra
-            }
-        }
-
-        channel.ack(msg);
-        
+    connection.on('error', (err) => {
+        console.error('RabbitMQ connection error:', err.message);
+        connection = null;
+        channel = null;
     });
 
-    console.log('RabbitMQ listo')
+    connection.on('close', () => {
+        console.error('RabbitMQ connection closed');
+        connection = null;
+        channel = null;
+    });
 
+    await channel.assertQueue(REPLY_QUEUE, { durable: true });
+
+    await channel.consume(
+        REPLY_QUEUE,
+        (msg) => {
+            if (!msg) return;
+
+            const correlationId = msg.properties.correlationId;
+            const pending = pendingRequests.get(correlationId);
+
+            if (pending) {
+                try {
+                    const data = JSON.parse(msg.content.toString());
+                    pending.resolve(data);
+                } catch (error) {
+                    pending.reject(error);
+                } finally {
+                    pendingRequests.delete(correlationId);
+                }
+            }
+
+            channel.ack(msg);
+        },
+        { noAck: false }
+    );
+
+    console.log(`RabbitMQ listo en Telegram: ${RABBITMQ_URL}`);
+    return channel;
 }
-// Promise
-function createRequestPromise(correlationId, timeout, resolve, reject){
 
-    // Crear el timeout y si se acaba eliminar el correlationId y dar un error de Timeout
+function createRequestPromise(correlationId, timeout, resolve, reject) {
     const timer = setTimeout(() => {
         pendingRequests.delete(correlationId);
         reject(new Error('Timeout'));
     }, timeout);
 
-    // Si llega notificación de llegada, metemos la info en el Map de pendigRequests
     pendingRequests.set(correlationId, {
-
-        // Si hay datos que añadir, se borra el timeout y se resuelve
-        resolve : (data) => {
+        resolve: (data) => {
             clearTimeout(timer);
             resolve(data);
         },
-
-        // Si hay errores, re hace un reject sin olvidar borrar el timer
-        reject : (error) => {
+        reject: (error) => {
             clearTimeout(timer);
             reject(error);
         }
     });
 }
 
-
-export async function sendRequest(routingKey, data, timeout = 10000){
+export async function sendRequest(queue, data, timeout = 10000) {
     if (!channel) throw new Error('RabbitMQ no inicializado');
 
-    const correlationId = uuidv4(); // Crear un id único para cada petición
-    const message = JSON.stringify(data); 
+    const correlationId = uuidv4();
 
-    // Devolver una promesa que se resolverá cuando llegue la respuesta o se alcance el timeout
-    return new Promise((resolve, reject) => {   
+    return new Promise((resolve, reject) => {
         createRequestPromise(correlationId, timeout, resolve, reject);
 
-        // Publicar el mensaje en el exchange con la routingKey y las propiedades necesarias
-        channel.publish(
-            exchange,
-            routingKey,
-            Buffer.from(message),
+        const message = {
+            messageId: uuidv4(),
+            timestamp: new Date().toISOString(),
+            correlationId,
+            payload: data
+        };
+
+        channel.sendToQueue(
+            queue,
+            Buffer.from(JSON.stringify(message)),
             {
                 correlationId,
-                replyTo: responseQueue
+                replyTo: REPLY_QUEUE,
+                persistent: true,
+                contentType: 'application/json'
             }
         );
 
-        console.log(`Enviado: ${routingKey}`, data);
+        console.log(`[Telegram RPC] Enviado a ${queue} con correlationId ${correlationId}`);
     });
 }
 
-// Funciones específicas para cada tipo de petición, que simplemente llaman a sendRequest con el routingKey adecuado
+/**
+ * Operaciones de alto nivel
+ * Ajusta estas colas si finalmente cambias el diseño.
+ */
 export const sendAuthLogin = (data) =>
-    sendRequest('auth.login', data);
+    sendRequest('auth.requests', { operation: 'auth.login', ...data });
 
 export const sendAuthRegister = (data) =>
-    sendRequest('auth.register', data);
+    sendRequest('auth.requests', { operation: 'auth.register', ...data });
 
 export const sendRecommendation = (data) =>
-    sendRequest('recommendation.get', data);
+    sendRequest('llm.requests', { query: data.query, token: data.token });
 
-export const sendSystemStatus = (data) =>
-    sendRequest('system.status', data);
+export const sendSystemStatus = () =>
+    sendRequest('bbdd.requests', { operation: 'stats.system' });
+
+export const sendSystemStats = () =>
+    sendRequest('bbdd.requests', { operation: 'stats.system' });
+
+export const sendAuthLogout = (data) =>
+    sendRequest('auth.requests', { operation: 'auth.logout', ...data });

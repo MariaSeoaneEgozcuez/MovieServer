@@ -1,0 +1,41 @@
+{
+  "gateway": {
+    "port": 3000,
+    "host": "0.0.0.0"
+  },
+  "rabbitmq": {
+    "url": "amqp://guest:guest@rabbitmq:5672",
+    "retries": 5,
+    "retryDelay": 2000
+  },
+  "services": {
+    "auth": {
+      "url": "http://auth-service:3001",
+      "timeout": 5000,
+      "queue": "auth.requests"
+    },
+    "query": {
+      "url": "http://query-service:3004",
+      "timeout": 30000,
+      "queue": "query.requests"
+    },
+    "bbdd": {
+      "url": "http://bbdd-service:3003",
+      "timeout": 5000,
+      "queue": "bbdd.requests"
+    },
+    "llm": {
+      "url": "http://llm-service:3002",
+      "timeout": 60000,
+      "queue": "llm.requests"
+    },
+    "stats": {
+      "url": "http://stats-service:3006",
+      "timeout": 5000,
+      "queue": "stats.requests"
+    }
+  },
+  "jwt": {
+    "secret": "secreto_dagasa_1"
+  }
+}
