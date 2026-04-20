@@ -3,8 +3,44 @@ import { connectRabbitMQ } from '../shared/messaging/rabbitmq.js';
 const REQUEST_QUEUE = 'llm.requests';
 const RESPONSE_QUEUE = 'llm.responses';
 
+const OLLAMA_HOST = process.env.OLLAMA_HOST || 'https://api.ollama.com';
+const OLLAMA_MODEL = process.env.OLLAMA_MODEL || 'qwen3-vl:235b';
+const OLLAMA_KEY = process.env.OLLAMA_KEY;
+
+const SYSTEM_MESSAGE = `Eres un recomendador experto de películas para una aplicación.
+
+Tu tarea es analizar el prompt del usuario y generar recomendaciones de películas personalizadas.
+
+Responde en formato claro y directo.`;
+
 async function processPrompt(prompt) {
-    return `Respuesta simulada del LLM para: ${prompt}`;
+    if (!OLLAMA_KEY) {
+        throw new Error('La variable de entorno OLLAMA_KEY no está definida. No se puede llamar a Ollama.');
+    }
+
+    const response = await fetch(`${OLLAMA_HOST}/api/chat`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${OLLAMA_KEY}`
+        },
+        body: JSON.stringify({
+            model: OLLAMA_MODEL,
+            messages: [
+                { role: 'system', content: SYSTEM_MESSAGE },
+                { role: 'user', content: prompt }
+            ],
+            stream: false
+        })
+    });
+
+    if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Ollama returned ${response.status}: ${errorText}`);
+    }
+
+    const body = await response.json();
+    return body?.message?.content || 'Ollama no devolvió contenido válido.';
 }
 
 export async function startLlmConsumer() {
