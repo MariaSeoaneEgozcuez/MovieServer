@@ -1,4 +1,4 @@
-import { connectRabbitMQ } from '../../shared/messaging/rabbitmq.js';
+import { connectRabbitMQ } from './rabbitmq.js';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcrypt';
 import config from 'config';
