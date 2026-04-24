@@ -10,12 +10,15 @@ services:
     deploy:
       replicas: 1
       restart_policy:
-        condition: on-failure
+        condition: any
+        delay: 5s
+        max_attempts: 5
     healthcheck:
       test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+      interval: 5s
+      timeout: 10s
+      retries: 10
+      start_period: 20s
     networks:
       - movieserver-network
 
@@ -30,7 +33,11 @@ services:
     deploy:
       replicas: 1
       restart_policy:
-        condition: on-failure
+        condition: any
+        delay: 5s
+        max_attempts: 10
+    depends_on:
+      - rabbitmq
     networks:
       - movieserver-network
 
@@ -42,7 +49,11 @@ services:
     deploy:
       replicas: 1
       restart_policy:
-        condition: on-failure
+        condition: any
+        delay: 5s
+        max_attempts: 10
+    depends_on:
+      - rabbitmq
     networks:
       - movieserver-network
 
@@ -56,7 +67,11 @@ services:
     deploy:
       replicas: 1
       restart_policy:
-        condition: on-failure
+        condition: any
+        delay: 5s
+        max_attempts: 10
+    depends_on:
+      - rabbitmq
     networks:
       - movieserver-network
 
@@ -69,7 +84,9 @@ services:
     deploy:
       replicas: 1
       restart_policy:
-        condition: on-failure
+        condition: any
+        delay: 5s
+        max_attempts: 10
     networks:
       - movieserver-network
 
@@ -81,7 +98,11 @@ services:
     deploy:
       replicas: 1
       restart_policy:
-        condition: on-failure
+        condition: any
+        delay: 5s
+        max_attempts: 10
+    depends_on:
+      - rabbitmq
     networks:
       - movieserver-network
 
@@ -93,7 +114,11 @@ services:
     deploy:
       replicas: 1
       restart_policy:
-        condition: on-failure
+        condition: any
+        delay: 5s
+        max_attempts: 10
+    depends_on:
+      - rabbitmq
     networks:
       - movieserver-network
 
@@ -107,7 +132,11 @@ services:
     deploy:
       replicas: 1
       restart_policy:
-        condition: on-failure
+        condition: any
+        delay: 5s
+        max_attempts: 10
+    depends_on:
+      - rabbitmq
     networks:
       - movieserver-network
 

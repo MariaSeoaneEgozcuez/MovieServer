@@ -13,6 +13,29 @@ const RABBITMQ_URL =
     : 'amqp://guest:guest@localhost:5672');
 
 const REPLY_QUEUE = 'gateway.reply';
+const MAX_RETRIES = 20;
+const INITIAL_DELAY = 5000;
+
+async function connectWithRetries(url, maxRetries = MAX_RETRIES, delay = INITIAL_DELAY) {
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      console.log(`[RabbitMQ] Intento de conexión ${attempt}/${maxRetries}...`);
+      const conn = await amqp.connect(url);
+      console.log(`✓ RabbitMQ conectado en: ${url}`);
+      return conn;
+    } catch (error) {
+      console.error(`✗ Intento ${attempt} falló:`, error.message);
+      
+      if (attempt < maxRetries) {
+        const waitTime = delay * Math.pow(2, attempt - 1);
+        console.log(`  Esperando ${waitTime}ms antes de reintentar...`);
+        await new Promise(resolve => setTimeout(resolve, waitTime));
+      } else {
+        throw new Error(`No se pudo conectar a RabbitMQ después de ${maxRetries} intentos`);
+      }
+    }
+  }
+}
 
 export async function connectRabbitMQ() {
   if (channel) {
@@ -20,7 +43,7 @@ export async function connectRabbitMQ() {
   }
 
   try {
-    connection = await amqp.connect(RABBITMQ_URL);
+    connection = await connectWithRetries(RABBITMQ_URL);
     channel = await connection.createChannel();
 
     connection.on('error', (err) => {
@@ -62,7 +85,7 @@ export async function connectRabbitMQ() {
       { noAck: false }
     );
 
-    console.log(`Connected to RabbitMQ successfully: ${RABBITMQ_URL}`);
+    console.log(`✓ API Gateway conectado a RabbitMQ`);
     return channel;
   } catch (error) {
     console.error('Failed to connect to RabbitMQ:', error.message);
