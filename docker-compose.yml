@@ -10,6 +10,9 @@ services:
       - rabbitmq_data:/var/lib/rabbitmq
     networks:
       - backend
+    deploy:
+      restart_policy:
+        condition: on-failure
 
   api-gateway:
     image: movieserver/api-gateway
@@ -22,6 +25,8 @@ services:
       - backend
     deploy:
       replicas: 1
+      restart_policy:
+        condition: on-failure
 
   auth-service:
     image: movieserver/auth-service
@@ -32,6 +37,11 @@ services:
       - backend
     deploy:
       replicas: 1
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+        max_attempts: 3
+        window: 120s
 
   database-service:
     image: movieserver/database-service
@@ -41,6 +51,11 @@ services:
       - backend
     deploy:
       replicas: 1
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+        max_attempts: 3
+        window: 120s
 
   llm-service:
     image: movieserver/llm-service
@@ -50,6 +65,11 @@ services:
       - backend
     deploy:
       replicas: 1
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+        max_attempts: 3
+        window: 120s
 
   telegram-service:
     image: movieserver/telegram-service
@@ -59,6 +79,11 @@ services:
       - backend
     deploy:
       replicas: 1
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+        max_attempts: 3
+        window: 120s
 
 networks:
   frontend:

@@ -1,16 +1,40 @@
 import * as amqp from 'amqplib';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
-import config from 'config';
+import { readFileSync } from 'fs';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
 import { MESSAGE_TYPES, createReply, createErrorReply } from './messages.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+// Load configuration directly
+const configPath = join(__dirname, 'config', 'default.json');
+const config = JSON.parse(readFileSync(configPath, 'utf-8'));
 
 let channel;
 
 async function connectRabbitMQ() {
-  const connection = await amqp.connect(config.get('rabbitmq.url'));
-  channel = await connection.createChannel();
-  await channel.assertQueue('auth-service');
-  console.log('Auth Service connected to RabbitMQ');
+  let retries = 0;
+  const maxRetries = 10;
+  
+  while (retries < maxRetries) {
+    try {
+      const connection = await amqp.connect(config.rabbitmq.url);
+      channel = await connection.createChannel();
+      await channel.assertQueue('auth-service');
+      console.log('Auth Service connected to RabbitMQ');
+      return;
+    } catch (error) {
+      console.log(`Failed to connect to RabbitMQ (attempt ${retries + 1}/${maxRetries}):`, error.message);
+      retries++;
+      if (retries < maxRetries) {
+        await new Promise(resolve => setTimeout(resolve, 5000)); // Wait 5 seconds
+      }
+    }
+  }
+  throw new Error('Failed to connect to RabbitMQ after maximum retries');
 }
 
 async function sendToDB(message) {
@@ -52,13 +76,13 @@ async function handleMessage(msg) {
         if (!user || !(await bcrypt.compare(pwd, user.password))) {
           throw new Error('Invalid credentials');
         }
-        const token = jwt.sign({ id: user.id, username: user.username }, config.get('jwt.secret'), { expiresIn: '1h' });
+        const token = jwt.sign({ id: user.id, username: user.username }, config.jwt.secret, { expiresIn: '1h' });
         response = createReply(message, { token, user });
         break;
 
       case MESSAGE_TYPES.AUTH_VERIFY:
         const { token: verifyToken } = message.payload;
-        const decoded = jwt.verify(verifyToken, config.get('jwt.secret'));
+        const decoded = jwt.verify(verifyToken, config.jwt.secret);
         const checkMsg = { type: MESSAGE_TYPES.DB_TOKEN_CHECK, payload: { token: verifyToken } };
         const isRevoked = await sendToDB(checkMsg);
         if (isRevoked) throw new Error('Token revoked');

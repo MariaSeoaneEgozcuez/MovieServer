@@ -18,11 +18,120 @@ console.log('Config loaded:', JSON.stringify(config, null, 2));
 let channel;
 let bot;
 const requestMap = new Map(); // Map of requestId -> { userId, chatId }
+const userSessions = new Map(); // Map of userId -> { authenticated: boolean, token: string, username: string }
 
 async function connectRabbitMQ() {
-  const connection = await amqp.connect(config.rabbitmq.url);
-  channel = await connection.createChannel();
-  console.log('Telegram Service connected to RabbitMQ');
+  let retries = 0;
+  const maxRetries = 10;
+  
+  while (retries < maxRetries) {
+    try {
+      const connection = await amqp.connect(config.rabbitmq.url);
+      channel = await connection.createChannel();
+      await channel.assertQueue('telegram-service');
+      await channel.assertQueue('telegram-responses');
+      console.log('Telegram Service connected to RabbitMQ');
+      return;
+    } catch (error) {
+      console.log(`Failed to connect to RabbitMQ (attempt ${retries + 1}/${maxRetries}):`, error.message);
+      retries++;
+      if (retries < maxRetries) {
+        await new Promise(resolve => setTimeout(resolve, 5000)); // Wait 5 seconds
+      }
+    }
+  }
+  throw new Error('Failed to connect to RabbitMQ after maximum retries');
+}
+
+async function sendToAuth(message) {
+  return new Promise((resolve) => {
+    const replyQueue = channel.assertQueue('', { exclusive: true });
+    replyQueue.then((q) => {
+      channel.consume(q.queue, (msg) => {
+        if (msg.properties.correlationId === message.correlationId) {
+          resolve(JSON.parse(msg.content.toString()));
+        }
+      }, { noAck: false });
+
+      channel.sendToQueue('auth-service', Buffer.from(JSON.stringify(message)), {
+        correlationId: message.correlationId,
+        replyTo: q.queue
+      });
+    });
+  });
+}
+
+function isUserAuthenticated(userId) {
+  const session = userSessions.get(userId);
+  return session && session.authenticated && session.token;
+}
+
+async function handleAuthFlow(ctx, session, text) {
+  const userId = ctx.from.id;
+
+  try {
+    switch (session.state) {
+      case 'waiting_username':
+        session.data.username = text;
+        session.state = 'waiting_email';
+        ctx.reply('Ingresa tu email:');
+        break;
+
+      case 'waiting_email':
+        session.data.email = text;
+        session.state = 'waiting_password';
+        ctx.reply('Ingresa tu contraseña:');
+        break;
+
+      case 'waiting_password':
+        session.data.password = text;
+        // Register user
+        const registerMsg = createMessage(MESSAGE_TYPES.AUTH_REGISTER, session.data);
+        const registerResponse = await sendToAuth(registerMsg);
+        
+        if (registerResponse.type === 'auth.register.reply') {
+          userSessions.set(userId, { 
+            authenticated: true, 
+            token: registerResponse.payload.token,
+            username: session.data.username 
+          });
+          ctx.reply('¡Registro exitoso! Ya puedes pedir recomendaciones de películas.');
+        } else {
+          ctx.reply('Error en el registro: ' + (registerResponse.payload?.message || 'Error desconocido'));
+          userSessions.delete(userId);
+        }
+        break;
+
+      case 'login_waiting_username':
+        session.data.username = text;
+        session.state = 'login_waiting_password';
+        ctx.reply('Ingresa tu contraseña:');
+        break;
+
+      case 'login_waiting_password':
+        session.data.password = text;
+        // Login user
+        const loginMsg = createMessage(MESSAGE_TYPES.AUTH_LOGIN, session.data);
+        const loginResponse = await sendToAuth(loginMsg);
+        
+        if (loginResponse.type === 'auth.login.reply') {
+          userSessions.set(userId, { 
+            authenticated: true, 
+            token: loginResponse.payload.token,
+            username: session.data.username 
+          });
+          ctx.reply('¡Login exitoso! Ya puedes pedir recomendaciones de películas.');
+        } else {
+          ctx.reply('Error en el login: ' + (loginResponse.payload?.message || 'Credenciales inválidas'));
+          userSessions.delete(userId);
+        }
+        break;
+    }
+  } catch (error) {
+    console.error('Error in auth flow:', error);
+    ctx.reply('Error en el proceso de autenticación. Intenta de nuevo.');
+    userSessions.delete(userId);
+  }
 }
 
 function initBot() {
@@ -38,20 +147,95 @@ function initBot() {
     bot.use(session());
 
     bot.start((ctx) => {
-      ctx.reply('Bienvenido a MovieServer. Envía una consulta para recomendaciones.');
+      const userId = ctx.from.id;
+      console.log('Bot start command received from user:', userId);
+      if (!isUserAuthenticated(userId)) {
+        ctx.reply('Bienvenido a MovieServer! Para usar el servicio de recomendaciones, necesitas autenticarte.\n\n' +
+                 'Comandos disponibles:\n' +
+                 '/register - Registrarse\n' +
+                 '/login - Iniciar sesión\n' +
+                 '/help - Ver ayuda');
+      } else {
+        ctx.reply('¡Bienvenido de vuelta! Envía una consulta para obtener recomendaciones de películas.');
+      }
+    });
+
+    bot.command('register', (ctx) => {
+      const userId = ctx.from.id;
+      console.log('Register command received from user:', userId);
+      userSessions.set(userId, { state: 'waiting_username', data: {} });
+      ctx.reply('Registro - Ingresa tu nombre de usuario:');
+    });
+
+    bot.command('login', (ctx) => {
+      const userId = ctx.from.id;
+      console.log('Login command received from user:', userId);
+      userSessions.set(userId, { state: 'login_waiting_username', data: {} });
+      ctx.reply('Login - Ingresa tu nombre de usuario:');
+    });
+
+    bot.command('help', (ctx) => {
+      const userId = ctx.from.id;
+      if (isUserAuthenticated(userId)) {
+        ctx.reply('Estás autenticado. Envía cualquier mensaje para obtener recomendaciones de películas.\n\n' +
+                 'Comandos:\n' +
+                 '/logout - Cerrar sesión\n' +
+                 '/help - Ver esta ayuda');
+      } else {
+        ctx.reply('Comandos disponibles:\n' +
+                 '/register - Registrarse\n' +
+                 '/login - Iniciar sesión\n' +
+                 '/help - Ver ayuda');
+      }
+    });
+
+    bot.command('logout', async (ctx) => {
+      const userId = ctx.from.id;
+      if (isUserAuthenticated(userId)) {
+        try {
+          const session = userSessions.get(userId);
+          const message = createMessage(MESSAGE_TYPES.AUTH_LOGOUT, { token: session.token });
+          await sendToAuth(message);
+          userSessions.delete(userId);
+          ctx.reply('Has cerrado sesión exitosamente.');
+        } catch (error) {
+          ctx.reply('Error al cerrar sesión.');
+        }
+      } else {
+        ctx.reply('No estás autenticado.');
+      }
     });
 
     bot.on('text', async (ctx) => {
-      const query = ctx.message.text;
       const userId = ctx.from.id;
       const chatId = ctx.chat.id;
+      const text = ctx.message.text;
+
+      console.log('Text message received:', { userId, chatId, text, messageId: ctx.message.message_id });
+
+      // Handle registration/login flow
+      const session = userSessions.get(userId);
+      if (session && session.state) {
+        console.log('Handling auth flow for user:', userId, 'state:', session.state);
+        await handleAuthFlow(ctx, session, text);
+        return;
+      }
+
+      // Check authentication for recommendations
+      if (!isUserAuthenticated(userId)) {
+        console.log('User not authenticated:', userId);
+        ctx.reply('Necesitas autenticarte para usar el servicio de recomendaciones.\n\n' +
+                 'Usa /register para registrarte o /login para iniciar sesión.');
+        return;
+      }
+
+      console.log('Processing recommendation request for authenticated user:', userId);
+      // Process recommendation request
       const requestId = uuidv4();
-      
-      // Store the correlation between requestId and user info
       requestMap.set(requestId, { userId, chatId });
       
-      const message = createMessage(MESSAGE_TYPES.LLM_REQUEST, { query, userId: ctx.from.id });
-      message.correlationId = requestId; // Add correlation ID
+      const message = createMessage(MESSAGE_TYPES.LLM_REQUEST, { query: text, userId });
+      message.correlationId = requestId;
       channel.sendToQueue('llm-service', Buffer.from(JSON.stringify(message)));
       ctx.reply('Procesando tu solicitud...');
     });
@@ -104,7 +288,9 @@ async function start() {
     console.log('Starting to listen for responses...');
     await listenForResponses();
     console.log('Launching bot...');
-    bot.launch();
+    bot.launch({
+      dropPendingUpdates: true
+    });
     console.log('Telegram Service started');
   } catch (error) {
     console.error('Error starting service:', error);
