@@ -1,0 +1,14 @@
+{
+  "name": "stats-service",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js"
+  },
+  "dependencies": {
+    "fastify": "^4.0.0",
+    "pino": "^8.0.0",
+    "pino-pretty": "^10.0.0"
+  }
+}
