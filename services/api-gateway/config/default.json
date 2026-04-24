@@ -1,0 +1,14 @@
+{
+  "server": {
+    "port": 3000
+  },
+  "rabbitmq": {
+    "url": "amqp://guest:guest@movieserver_rabbitmq:5672"
+  },
+  "services": {
+    "auth": "auth-service",
+    "db": "database-service",
+    "llm": "llm-service",
+    "telegram": "telegram-service"
+  }
+}

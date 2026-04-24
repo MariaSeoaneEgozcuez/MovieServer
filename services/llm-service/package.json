@@ -1,0 +1,16 @@
+{
+  "name": "llm-service",
+  "version": "1.0.0",
+  "description": "LLM service for MovieServer",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "amqplib": "^0.10.4",
+    "axios": "^1.13.6",
+    "uuid": "^10.0.0",
+    "config": "^4.2.0"
+  }
+}

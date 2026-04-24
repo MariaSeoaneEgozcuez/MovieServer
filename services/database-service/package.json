@@ -1,0 +1,17 @@
+{
+  "name": "database-service",
+  "version": "1.0.0",
+  "description": "Database service for MovieServer",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "amqplib": "^0.10.4",
+    "sqlite": "^5.1.1",
+    "sqlite3": "^5.1.7",
+    "uuid": "^10.0.0",
+    "config": "^4.2.0"
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "name": "auth-service",
+  "version": "1.0.0",
+  "description": "Authentication service for MovieServer",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "amqplib": "^0.10.4",
+    "bcrypt": "^6.0.0",
+    "jsonwebtoken": "^9.0.3",
+    "uuid": "^10.0.0",
+    "config": "^4.2.0"
+  }
+}

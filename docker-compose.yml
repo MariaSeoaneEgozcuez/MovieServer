@@ -1,0 +1,69 @@
+version: '3.8'
+
+services:
+  rabbitmq:
+    image: rabbitmq:3-management
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - backend
+
+  api-gateway:
+    image: movieserver/api-gateway
+    ports:
+      - "3000:3000"
+    depends_on:
+      - rabbitmq
+    networks:
+      - frontend
+      - backend
+    deploy:
+      replicas: 1
+
+  auth-service:
+    image: movieserver/auth-service
+    depends_on:
+      - rabbitmq
+      - database-service
+    networks:
+      - backend
+    deploy:
+      replicas: 1
+
+  database-service:
+    image: movieserver/database-service
+    volumes:
+      - db_data:/app/data
+    networks:
+      - backend
+    deploy:
+      replicas: 1
+
+  llm-service:
+    image: movieserver/llm-service
+    depends_on:
+      - rabbitmq
+    networks:
+      - backend
+    deploy:
+      replicas: 1
+
+  telegram-service:
+    image: movieserver/telegram-service
+    depends_on:
+      - rabbitmq
+    networks:
+      - backend
+    deploy:
+      replicas: 1
+
+networks:
+  frontend:
+  backend:
+
+volumes:
+  rabbitmq_data:
+  db_data:

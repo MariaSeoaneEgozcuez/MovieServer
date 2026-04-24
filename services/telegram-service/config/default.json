@@ -1,0 +1,12 @@
+{
+  "rabbitmq": {
+    "url": "amqp://guest:guest@movieserver_rabbitmq:5672"
+  },
+  "telegram": {
+    "botToken": "8712582890:AAGRHuEV4T8iAb3LZSEyKjKADm6Ncsl7e9c",
+    "welcomeChatId": ""
+  },
+  "apiGateway": {
+    "url": "http://api-gateway:3000"
+  }
+}

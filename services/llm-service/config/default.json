@@ -1,0 +1,10 @@
+{
+  "rabbitmq": {
+    "url": "amqp://guest:guest@movieserver_rabbitmq:5672"
+  },
+  "ollama": {
+    "host": "https://api.ollama.com",
+    "model": "qwen3-vl:235b",
+    "key": ""
+  }
+}
