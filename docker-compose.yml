@@ -1,39 +1,120 @@
+version: '3.9'
+
 services:
+  rabbitmq:
+    image: rabbitmq:3-management
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+    networks:
+      - movieserver-network
+
   api-gateway:
     build:
       context: ./api-gateway
-    container_name: api-gateway
     ports:
       - "3000:3000"
     environment:
       NODE_ENV: production
-    depends_on:
-      - query-service
-      - bbdd-service
-      - llm-service
-      - stats-service
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
+      NODE_CONFIG: '{"services":{"stats":{"url":"http://stats-service:3005"}}}'
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
     networks:
       - movieserver-network
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
+
+  auth-service:
+    build:
+      context: ./auth-service
+    environment:
+      NODE_ENV: production
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+    networks:
+      - movieserver-network
+
+  bbdd-service:
+    build:
+      context: ./BBDDMicroservicio
+    ports:
+      - "3003:3003"
+    environment:
+      NODE_ENV: production
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+    networks:
+      - movieserver-network
 
   stats-service:
     build:
       context: ./StatsMicroservicio
-    container_name: stats-service
     ports:
       - "3005:3005"
+    environment:
+      NODE_ENV: production
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
     networks:
       - movieserver-network
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3005/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
+
+  query-service:
+    build:
+      context: ./QueryMicroservicio
+    environment:
+      NODE_ENV: production
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+    networks:
+      - movieserver-network
+
+  llm-service:
+    build:
+      context: ./LlmMicroservicio
+    environment:
+      NODE_ENV: production
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+    networks:
+      - movieserver-network
+
+  telegram-service:
+    build:
+      context: ./TelegramMicroservicio
+    environment:
+      NODE_ENV: production
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
+      TELEGRAM_WELCOME_CHAT_ID: ${TELEGRAM_WELCOME_CHAT_ID}
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+    networks:
+      - movieserver-network
 
 networks:
   movieserver-network:
-    driver: bridge
+    driver: overlay
