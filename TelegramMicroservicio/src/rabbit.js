@@ -5,14 +5,16 @@ let connection = null;
 let channel = null;
 const pendingRequests = new Map();
 
-const RABBITMQ_URL = process.env.RABBITMQ_URL || 'amqp://guest:guest@localhost:5672';
+const RABBITMQ_URL = 'amqp://guest:guest@localhost:5672';
 const REPLY_QUEUE = 'telegram.reply';
 
 export async function initRabbitMQ() {
+    try{
     if (channel) return channel;
 
     connection = await amqp.connect(RABBITMQ_URL);
     channel = await connection.createChannel();
+    console.log('Conectado a RabbitMQ en Telegram');
 
     connection.on('error', (err) => {
         console.error('RabbitMQ connection error:', err.message);
@@ -54,6 +56,11 @@ export async function initRabbitMQ() {
 
     console.log(`RabbitMQ listo en Telegram: ${RABBITMQ_URL}`);
     return channel;
+    }
+    catch(error){
+        console.error('Error al conectar a RabbitMQ:', error.message);
+        throw error;
+    }
 }
 
 function createRequestPromise(correlationId, timeout, resolve, reject) {

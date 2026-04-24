@@ -10,7 +10,6 @@
   },
   "dependencies": {
     "fastify": "^5.8.4",
-    "@fastify/healthcheck": "^10.0.1",
     "sqlite": "^5.1.1",
     "sqlite3": "^6.0.1",
     "amqplib": "^1.0.3",

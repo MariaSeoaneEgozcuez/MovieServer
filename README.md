@@ -14,37 +14,92 @@ MovieServer es un sistema de recomendación de películas que permite a los usua
 
 ## Instrucciones de instalación y configuración
 
+### Opción 1: Despliegue con Docker Swarm (Recomendado)
+
 1. **Clona el repositorio:**
    ```sh
    git clone https://github.com/MariaSeoaneEgozcuez/MovieServer.git
    cd MovieServer
    ```
+
+2. **Asegúrate de que Docker Desktop esté ejecutándose.**
+
+3. **Inicializa Docker Swarm:**
+   ```sh
+   docker swarm init
+   ```
+
+4. **Despliega la aplicación:**
+   ```sh
+   docker stack deploy -c docker-compose.yml movieserver
+   ```
+
+5. **Verifica el estado de los servicios:**
+   ```sh
+   docker stack ps movieserver
+   ```
+
+6. **Configura variables de entorno opcionales:**
+   - Para el bot de Telegram, crea un archivo `.env` o edita `docker-compose.yml` con:
+     ```yaml
+     environment:
+       - TELEGRAM_BOT_TOKEN=tu_token_aqui
+       - TELEGRAM_WELCOME_CHAT_ID=tu_chat_id
+     ```
+   - Luego redeploy: `docker stack deploy -c docker-compose.yml movieserver`
+
+### Opción 2: Instalación local (Desarrollo)
+
+1. **Clona el repositorio:**
+   ```sh
+   git clone https://github.com/MariaSeoaneEgozcuez/MovieServer.git
+   cd MovieServer
+   ```
+
 2. **Instala las dependencias:**
    ```sh
    npm install
    ```
+
 3. **Configura las variables de entorno:**
    - Edita `config/local.json` para añadir tus claves:
      - `telegram.botToken`: Token de tu bot de Telegram
      - `jwt.secret`: Secreto para JWT
      - `ollama.key`: API Key de Ollama
    - Opcionalmente, ajusta el puerto y la ruta de la base de datos en `config/default.json`.
+
 4. **Inicia el servidor:**
    ```sh
    npm start
    ```
+
 5. **(Opcional) Inicia el bot de Telegram:**
    ```sh
    node src/controllers/telegram/bot.js
    ```
 
+## Servicios y Puertos
+
+- **API Gateway:** http://localhost:3000
+- **BBDD Service:** http://localhost:3003
+- **Stats Service:** http://localhost:3005
+- **RabbitMQ Management:** http://localhost:15672 (usuario: guest, contraseña: guest)
+
 ## Variables de entorno necesarias
 
-- `telegram.botToken`: Token del bot de Telegram
-- `jwt.secret`: Secreto para firmar JWT
-- `ollama.key`: API Key para el modelo LLM
-- `server.port`: Puerto del servidor (por defecto 3000)
-- `db.filename`: Ruta del archivo SQLite (por defecto `./bbdd.db`)
+- `TELEGRAM_BOT_TOKEN`: Token del bot de Telegram (opcional para despliegue básico)
+- `TELEGRAM_WELCOME_CHAT_ID`: ID del chat de bienvenida de Telegram (opcional)
+- `NODE_ENV`: Entorno de ejecución (production en Docker)
+
+## Detener la aplicación
+
+### Docker Swarm
+```sh
+docker stack rm movieserver
+```
+
+### Local
+Presiona `Ctrl+C` en la terminal donde se ejecuta el servidor.
 
 ## Documentación de la API REST propia
 

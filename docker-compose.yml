@@ -1,5 +1,3 @@
-version: '3.9'
-
 services:
   rabbitmq:
     image: rabbitmq:3-management
@@ -13,12 +11,16 @@ services:
       replicas: 1
       restart_policy:
         condition: on-failure
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     networks:
       - movieserver-network
 
   api-gateway:
-    build:
-      context: ./api-gateway
+    image: api-gateway
     ports:
       - "3000:3000"
     environment:
@@ -33,8 +35,7 @@ services:
       - movieserver-network
 
   auth-service:
-    build:
-      context: ./auth-service
+    image: auth-service
     environment:
       NODE_ENV: production
       RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
@@ -46,8 +47,7 @@ services:
       - movieserver-network
 
   bbdd-service:
-    build:
-      context: ./BBDDMicroservicio
+    image: bbdd-service
     ports:
       - "3003:3003"
     environment:
@@ -61,8 +61,7 @@ services:
       - movieserver-network
 
   stats-service:
-    build:
-      context: ./StatsMicroservicio
+    image: stats-service
     ports:
       - "3005:3005"
     environment:
@@ -75,8 +74,7 @@ services:
       - movieserver-network
 
   query-service:
-    build:
-      context: ./QueryMicroservicio
+    image: query-service
     environment:
       NODE_ENV: production
       RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
@@ -88,8 +86,7 @@ services:
       - movieserver-network
 
   llm-service:
-    build:
-      context: ./LlmMicroservicio
+    image: llm-service
     environment:
       NODE_ENV: production
       RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
@@ -101,13 +98,12 @@ services:
       - movieserver-network
 
   telegram-service:
-    build:
-      context: ./TelegramMicroservicio
+    image: telegram-service
     environment:
       NODE_ENV: production
       RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
-      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
-      TELEGRAM_WELCOME_CHAT_ID: ${TELEGRAM_WELCOME_CHAT_ID}
+      TELEGRAM_BOT_TOKEN: 8712582890:AAGRHuEV4T8iAb3LZSEyKjKADm6Ncsl7e9c
+      TELEGRAM_WELCOME_CHAT_ID: CineServerBot
     deploy:
       replicas: 1
       restart_policy:

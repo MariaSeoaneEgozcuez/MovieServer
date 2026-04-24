@@ -6,8 +6,8 @@ import config from 'config';
 import { getUserbyUsername, createUser, isTokenRevoked, revokeToken} from './functions.js';
 
 
-const RESPONSE_QUEUE = 'auth_response_queue';
-const REQUEST_QUEUE = 'auth_request_queue';
+const RESPONSE_QUEUE = 'auth.response';
+const REQUEST_QUEUE = 'auth.request';
 
 export async function startAuthConsumer() {
     const channel = await connectRabbitMQ();

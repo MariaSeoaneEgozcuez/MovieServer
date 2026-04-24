@@ -18,7 +18,7 @@ class ServiceClient {
     
     this.baseUrl = serviceConfig.url;
     this.timeout = serviceConfig.timeout || 30000;
-    this.queue = serviceConfig.queue || `${serviceName}.requests`;
+    this.queue = serviceConfig.queue || `gateway.requests`;
     
     this.httpClient = axios.create({
       baseURL: this.baseUrl,
