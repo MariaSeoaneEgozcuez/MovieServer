@@ -268,18 +268,41 @@ bot.on('text', async (ctx) => {
         }
     }
 
-    try {
-        await bot.launch();
-        console.log('[Startup] ✓ Telegram bot iniciado correctamente.');
-        
-        if (welcomeChatId) {
-            await bot.telegram.sendMessage(
-                welcomeChatId,
-                'El bot de MovieServer se ha iniciado. Usa /start para ver el menú, /register para registrarte o /login para iniciar sesión.'
-            );
+    async function startTelegramBot() {
+        const maxTelegramAttempts = 10;
+
+        for (let attempt = 1; attempt <= maxTelegramAttempts; attempt++) {
+            try {
+                await bot.launch({ dropPendingUpdates: true });
+                console.log('[Startup] ✓ Telegram bot iniciado correctamente.');
+
+                if (welcomeChatId) {
+                    await bot.telegram.sendMessage(
+                        welcomeChatId,
+                        'El bot de MovieServer se ha iniciado. Usa /start para ver el menú, /register para registrarte o /login para iniciar sesión.'
+                    );
+                }
+
+                return;
+            } catch (error) {
+                const isConflict = error?.response?.error_code === 409;
+                const errorMessage = isConflict
+                    ? 'Telegram conflict: parece que ya hay otra instancia del bot usando getUpdates.'
+                    : error.message || String(error);
+
+                console.error(`[Startup] Error al iniciar el bot de Telegram (intento ${attempt}/${maxTelegramAttempts}): ${errorMessage}`);
+
+                if (attempt === maxTelegramAttempts) {
+                    console.error('[Startup] No se pudo iniciar el bot de Telegram después de múltiples intentos.');
+                    process.exit(1);
+                }
+
+                const retryDelayMs = isConflict ? 20000 : 10000;
+                console.log(`[Startup] Reintentando en ${retryDelayMs / 1000}s...`);
+                await new Promise((resolve) => setTimeout(resolve, retryDelayMs));
+            }
         }
-    } catch (error) {
-        console.error('[Startup] Error al iniciar el bot de Telegram:', error);
-        process.exit(1);
     }
+
+    await startTelegramBot();
 })();
