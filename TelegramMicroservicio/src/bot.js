@@ -244,17 +244,42 @@ bot.on('text', async (ctx) => {
     }
 });
 
-bot.launch()
-    .then(async () => {
-        await initRabbitMQ();
-        console.log('Telegram bot iniciado correctamente.');
+(async () => {
+    const maxInitAttempts = 30;
+    let initAttempt = 0;
+    
+    while (initAttempt < maxInitAttempts) {
+        try {
+            console.log(`[Startup] Inicializando RabbitMQ (intento ${initAttempt + 1}/${maxInitAttempts})...`);
+            await initRabbitMQ();
+            console.log('[Startup] ✓ RabbitMQ inicializado correctamente.');
+            break;
+        } catch (error) {
+            initAttempt++;
+            if (initAttempt < maxInitAttempts) {
+                const delayMs = Math.min(30000, 2000 * initAttempt);
+                console.warn(`[Startup] Error al inicializar RabbitMQ: ${error.message}`);
+                console.log(`[Startup] Reintentando en ${delayMs}ms...`);
+                await new Promise(resolve => setTimeout(resolve, delayMs));
+            } else {
+                console.error('[Startup] Error al inicializar RabbitMQ después de múltiples intentos');
+                process.exit(1);
+            }
+        }
+    }
+
+    try {
+        await bot.launch();
+        console.log('[Startup] ✓ Telegram bot iniciado correctamente.');
+        
         if (welcomeChatId) {
             await bot.telegram.sendMessage(
                 welcomeChatId,
                 'El bot de MovieServer se ha iniciado. Usa /start para ver el menú, /register para registrarte o /login para iniciar sesión.'
             );
         }
-    })
-    .catch((error) => {
-        console.error('Error al iniciar el bot de Telegram:', error);
-    });
+    } catch (error) {
+        console.error('[Startup] Error al iniciar el bot de Telegram:', error);
+        process.exit(1);
+    }
+})();

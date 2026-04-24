@@ -1,4 +1,4 @@
-import { connectRabbitMQ } from '../shared/messaging/rabbitmq.js';
+import { connectRabbitMQ } from '/usr/src/app/shared/messaging/rabbitmq.js';
 
 const REQUEST_QUEUE = 'llm.requests';
 const RESPONSE_QUEUE = 'llm.responses';

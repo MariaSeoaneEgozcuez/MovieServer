@@ -6,53 +6,70 @@ import config from 'config';
 import { getUserbyUsername, createUser, isTokenRevoked, revokeToken} from './functions.js';
 
 
-const RESPONSE_QUEUE = 'auth.response';
-const REQUEST_QUEUE = 'auth.request';
+const REQUEST_QUEUE = 'auth.requests';
 
 export async function startAuthConsumer() {
     const channel = await connectRabbitMQ();
 
     await channel.assertQueue(REQUEST_QUEUE, { durable: true });
-    await channel.assertQueue(RESPONSE_QUEUE, { durable: true });
 
     const consumerTag = await channel.consume(REQUEST_QUEUE, async (msg) => {
         if (!msg) return;
+
+        const correlationId = msg.properties.correlationId;
+        const replyTo = msg.properties.replyTo;
 
         let response;
 
         try {
             const request = JSON.parse(msg.content.toString());
 
-            switch (request.action) {
+            // Soportar ambos formatos: "action" (viejo) y "operation" (nuevo RPC)
+            const operation = request.action || request.operation;
+            // Extraer payload o usar request completo sin operation/action
+            const payload = request.payload || (({ operation, action, ...rest }) => rest)(request);
+
+            switch (operation) {
                 case 'login':
-                    response = await handleLogin(request.payload);
+                case 'auth.login':
+                    response = await handleLogin(payload);
                     break;
 
                 case 'register':
-                    response = await handleRegister(request.payload);
+                case 'auth.register':
+                    response = await handleRegister(payload);
                     break;
 
                 case 'logout':
-                    response = await handleLogout(request.payload);
+                case 'auth.logout':
+                    response = await handleLogout(payload);
                     break;
 
                 case 'validate':
-                    response = await handleValidate(request.payload);
+                case 'auth.validate':
+                    response = await handleValidate(payload);
                     break;
 
                 default:
-                    throw new Error('Acción no soportada');
+                    throw new Error(`Acción no soportada: ${operation}`);
             }
 
         } catch (error) {
             response = { error: error.message };
         }
 
-        channel.sendToQueue(
-            RESPONSE_QUEUE,
-            Buffer.from(JSON.stringify(response)),
-            { persistent: true }
-        );
+        // Si hay replyTo, responder en patrón RPC
+        if (replyTo) {
+            channel.sendToQueue(
+                replyTo,
+                Buffer.from(JSON.stringify(response)),
+                { 
+                    persistent: true,
+                    correlationId: correlationId
+                }
+            );
+            console.log(`[Auth RPC] Respuesta enviada a ${replyTo} (${correlationId})`);
+        }
 
         channel.ack(msg);
 
